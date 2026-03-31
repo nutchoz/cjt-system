@@ -23,10 +23,15 @@ const TransportCompanyTab = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [initialFormValues, setInitialFormValues] = useState<Record<string, any>>({});
 
+    // Fetch records on initial mount
     useEffect(() => {
         fetchRecords();
     }, []);
 
+    /**
+     * Fetches all transport company records from the API
+     * and stores them in state. Shows an error alert on failure.
+     */
     const fetchRecords = async () => {
         setIsLoading(true);
         try {
@@ -46,6 +51,9 @@ const TransportCompanyTab = () => {
         }
     };
 
+    /**
+     * Opens the modal in "Add" mode with blank/default form fields.
+     */
     const handleAddNew = () => {
         setEditMode(false);
         setEditingId(null);
@@ -53,6 +61,9 @@ const TransportCompanyTab = () => {
         setIsModalOpen(true);
     };
 
+    /**
+     * Opens the modal in "Edit" mode pre-filled with the selected record's data.
+     */
     const handleEdit = (record: TransportCompanyRecord) => {
         setEditMode(true);
         setEditingId(record.id);
@@ -65,8 +76,9 @@ const TransportCompanyTab = () => {
     };
 
     /**
-     * Check for duplicate code or name among existing records.
-     * When editing, exclude the record being edited (by id).
+     * Checks if the given code or name already exists among current records.
+     * Skips the record currently being edited to allow saving without false conflicts.
+     * Returns the duplicate field and its existing value, or null if no duplicate is found.
      */
     const checkDuplicates = (code: string, name: string): { field: string; value: string } | null => {
         const normalizedCode = code.trim().toUpperCase();
@@ -85,6 +97,10 @@ const TransportCompanyTab = () => {
         return null;
     };
 
+    /**
+     * Returns the field configuration array for the DynamicForm component,
+     * pre-populated with the current initialFormValues state.
+     */
     const getFormFields = (): DynamicFormField[] => [
         {
             name: 'name',
@@ -117,7 +133,13 @@ const TransportCompanyTab = () => {
         },
     ];
 
+    /**
+     * Handles form submission for both creating and updating a transport company.
+     * Runs duplicate validation before sending the request.
+     * Shows success/error alerts and refreshes the records list on completion.
+     */
     const handleFormSubmit = async (data: Record<string, any>) => {
+        // Block submission if a duplicate code or name already exists
         const duplicate = checkDuplicates(data.code, data.name);
         if (duplicate) {
             await Swal.fire({
@@ -134,10 +156,11 @@ const TransportCompanyTab = () => {
         try {
             const payload = {
                 name: data.name.trim(),
-                code: data.code.trim().toUpperCase(),
+                code: data.code.trim().toUpperCase(), // normalise code to uppercase
                 status: data.status,
             };
 
+            // Send PUT for edits, POST for new entries
             let response;
             if (editMode && editingId) {
                 response = await RequestHandler.fetchData('PUT', `transport-companies/update/${editingId}`, payload);
@@ -167,6 +190,9 @@ const TransportCompanyTab = () => {
         }
     };
 
+    /**
+     * Closes the modal and resets all form-related state back to defaults.
+     */
     const handleFormCancel = () => {
         setIsModalOpen(false);
         setEditMode(false);
@@ -174,6 +200,10 @@ const TransportCompanyTab = () => {
         setInitialFormValues({});
     };
 
+    /**
+     * Prompts the user for confirmation, then deletes the selected transport company.
+     * Refreshes the records list after a successful deletion.
+     */
     const handleDelete = async (record: TransportCompanyRecord) => {
         const result = await Swal.fire({
             title: 'Confirm Delete',
@@ -203,6 +233,10 @@ const TransportCompanyTab = () => {
         }
     };
 
+    /**
+     * Toggles the status of a transport company between 'active' and 'banned'
+     * via a PUT request, then optimistically updates the local records state.
+     */
     const handleToggleStatus = async (record: TransportCompanyRecord) => {
         const newStatus: 'active' | 'banned' = record.status === 'active' ? 'banned' : 'active';
         setIsSubmitting(true);
@@ -211,6 +245,7 @@ const TransportCompanyTab = () => {
                 ...record,
                 status: newStatus,
             });
+            // Update only the affected record in state without re-fetching the full list
             setRecords(prev => prev.map(r => r.id === record.id ? { ...r, status: newStatus } : r));
         } catch (error) {
             Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to update status.' });
@@ -219,6 +254,8 @@ const TransportCompanyTab = () => {
         }
     };
 
+    // Column definitions for the DataTable, including custom renderers and export formatters.
+    // The Actions column is conditionally included — only rendered for admin users.
     const columns = [
         {
             key: 'code',
@@ -240,6 +277,7 @@ const TransportCompanyTab = () => {
             key: 'status',
             label: 'Status',
             sortable: true,
+            // Clickable badge that toggles the status inline between Active and Banned
             render: (value: string, row: TransportCompanyRecord) => (
                 <button
                     onClick={(e) => { e.stopPropagation(); handleToggleStatus(row); }}
@@ -257,9 +295,10 @@ const TransportCompanyTab = () => {
                     {value === 'active' ? 'Active' : 'Banned'}
                 </button>
             ),
-            exportRender: (value: string) => value,
+            exportRender: (value: string) => value, // plain text for exports
         },
-        
+
+        // Actions column is conditionally spread in — only visible to admins
         ...(admin?.role === 'admin' ? [{
             key: 'actions',
             label: 'Actions',
@@ -273,16 +312,18 @@ const TransportCompanyTab = () => {
                     >
                         <Edit2 size={14} /> Edit
                     </button>
+                    {/* Delete button — only shown to admin role */}
                     {admin?.role === 'admin' && (
-                    <button
-                        onClick={(e) => { e.stopPropagation(); handleDelete(row); }}
-                        className="px-3 py-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600 transition text-sm font-semibold flex items-center gap-1"
-                    >
-                        <Trash2 size={14} /> Delete
-                    </button>)}
+                        <button
+                            onClick={(e) => { e.stopPropagation(); handleDelete(row); }}
+                            className="px-3 py-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600 transition text-sm font-semibold flex items-center gap-1"
+                        >
+                            <Trash2 size={14} /> Delete
+                        </button>
+                    )}
                 </div>
             ),
-            exportRender: () => '',
+            exportRender: () => '', // actions column excluded from exports
         }] : []),
     ];
 
@@ -322,6 +363,7 @@ const TransportCompanyTab = () => {
                 />
             </div>
 
+            {/* Add / Edit modal */}
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
                     <div className="bg-white rounded-2xl p-8 w-full max-w-2xl max-h-[90vh] overflow-y-auto">

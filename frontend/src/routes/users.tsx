@@ -20,10 +20,15 @@ const RoleAssignmentTab = () => {
     const [records, setRecords] = useState<AdminRecord[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    // Fetch records on initial mount
     useEffect(() => {
         fetchRecords();
     }, []);
 
+    /**
+     * Fetches all admin/user accounts from the API
+     * and stores them in state. Shows an error alert on failure.
+     */
     const fetchRecords = async () => {
         setIsLoading(true);
         try {
@@ -42,11 +47,19 @@ const RoleAssignmentTab = () => {
         }
     };
 
+    /**
+     * Assigns a new role ('admin' or 'user') to the given account.
+     * Guards against self-role changes and no-op updates.
+     * Prompts for confirmation before sending the PUT request,
+     * then optimistically updates the local records state on success.
+     */
     const handleAssignRole = async (record: AdminRecord, newRole: 'admin' | 'user') => {
+        // Prevent the currently logged-in admin from changing their own role
         if (record.id === currentAdmin?.id) {
             Swal.fire({ icon: 'warning', title: 'Action Denied', text: 'You cannot change your own role.' });
             return;
         }
+        // Skip if the role is already set to the selected value
         if (record.role === newRole) return;
 
         const result = await Swal.fire({
@@ -68,6 +81,7 @@ const RoleAssignmentTab = () => {
             });
 
             if (response?.success) {
+                // Update only the affected record in state without re-fetching the full list
                 setRecords(prev => prev.map(r => r.id === record.id ? { ...r, role: newRole } : r));
                 Swal.fire({ icon: 'success', title: 'Role Updated!', timer: 1500, showConfirmButton: false });
             } else {
@@ -80,11 +94,13 @@ const RoleAssignmentTab = () => {
         }
     };
 
+    // Column definitions for the DataTable, including custom renderers and export formatters
     const columns = [
         {
             key: 'name',
             label: 'Name',
             sortable: true,
+            // Renders a generated avatar initial alongside the user's name, with a "You" badge for the current user
             render: (value: string, row: AdminRecord) => (
                 <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center flex-shrink-0">
@@ -92,6 +108,7 @@ const RoleAssignmentTab = () => {
                     </div>
                     <div>
                         <p className="text-sm font-semibold text-slate-800">{value}</p>
+                        {/* Highlight the currently logged-in account */}
                         {row.id === currentAdmin?.id && (
                             <span className="text-[10px] font-bold text-blue-500">You</span>
                         )}
@@ -111,6 +128,7 @@ const RoleAssignmentTab = () => {
             key: 'role',
             label: 'Current Role',
             sortable: true,
+            // Displays a styled badge with an icon reflecting the user's current role
             render: (value: string) => (
                 <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border
                     ${value === 'admin'
@@ -125,12 +143,13 @@ const RoleAssignmentTab = () => {
                     {value === 'admin' ? 'Admin' : 'User'}
                 </span>
             ),
-            exportRender: (value: string) => value,
+            exportRender: (value: string) => value, // plain text for exports
         },
         {
             key: 'createdAt',
             label: 'Created',
             sortable: true,
+            // Formats the ISO date string into a readable "Mon DD, YYYY" format
             render: (value: string) => (
                 <p className="text-sm text-slate-500">
                     {new Date(value).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
@@ -142,6 +161,8 @@ const RoleAssignmentTab = () => {
             label: 'Assign Role',
             sortable: false,
             filterable: false,
+            // Renders two role buttons (Admin / User); both are disabled for the current user's own row
+            // and whichever role is already active is also disabled to prevent no-op updates
             render: (_: any, row: AdminRecord) => {
                 const isSelf = row.id === currentAdmin?.id;
                 return (
@@ -173,7 +194,7 @@ const RoleAssignmentTab = () => {
                     </div>
                 );
             },
-            exportRender: () => '',
+            exportRender: () => '', // actions column excluded from exports
         },
     ];
 

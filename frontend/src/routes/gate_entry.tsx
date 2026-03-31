@@ -63,11 +63,13 @@ const GateEntryManagement = () => {
         block_location: [],
     });
 
+    /** Opens the report modal and sets the selected record's data for display */
     const handleReportClick = (record: any) => {
         setReportData(record);
         setIsReportModalOpen(true);
     };
 
+    /** Opens the backup modal to show the previous version of a record, or shows an alert if no backup exists */
     const handleViewBackup = (record: any) => {
         if (record.backup) {
             setBackupData(record.backup);
@@ -88,6 +90,7 @@ const GateEntryManagement = () => {
     const [plateNumberOption, setPlateNumberOption] = useState<{ label: string; value: string }[]>([]);
     const [driverLicenseMap, setDriverLicenseMap] = useState<Record<string, string>>({});
 
+    // On mount, fetch all initial data needed for the form dropdowns and table
     useEffect(() => {
         fetchRecords();
         fetchShippingLines();
@@ -96,6 +99,7 @@ const GateEntryManagement = () => {
         fetchPlateNumber();
     }, []);
 
+    /** Fetches all active shipping lines and populates the shipping line dropdown options */
     const fetchShippingLines = async () => {
         const response = await RequestHandler.fetchData('GET', 'shipping-lines/get-all');
         if (response?.success && response.shippingLines) {
@@ -107,6 +111,7 @@ const GateEntryManagement = () => {
         }
     };
 
+    /** Fetches all active transport companies and populates the transport company dropdown options */
     const fetchTransportCompany = async () => {
         const response = await RequestHandler.fetchData('GET', 'transport-companies/get-all');
         if (response?.success && response.transportCompanies) {
@@ -118,6 +123,7 @@ const GateEntryManagement = () => {
         }
     };
 
+    /** Fetches all active drivers, populates the driver dropdown, and builds a name-to-license map for auto-fill */
     const fetchDrivers = async () => {
         const response = await RequestHandler.fetchData('GET', 'drivers/get-all');
         if (response?.success && response.drivers) {
@@ -129,6 +135,7 @@ const GateEntryManagement = () => {
         }
     };
 
+    /** Fetches all active plate numbers and populates the plate number dropdown options */
     const fetchPlateNumber = async () => {
         const response = await RequestHandler.fetchData('GET', 'plate-numbers/get-all');
         if (response?.success && response.plateNumbers) {
@@ -140,12 +147,15 @@ const GateEntryManagement = () => {
         }
     };
 
+    // Rebuilds datalist (autocomplete) options whenever records or allEntries change
     useEffect(() => {
         const source = allEntries.length > 0 ? allEntries : records;
         if (source.length > 0) {
+            // Extracts unique, sorted, non-null values for a given field key
             const extract = (key: string) =>
                 [...new Set(source.map((r: any) => r[key]).filter(Boolean))].sort() as string[];
 
+            // Builds combined block-row-col location strings for the block location datalist
             const blockLocationOptions = [
                 ...new Set(
                     source
@@ -177,6 +187,7 @@ const GateEntryManagement = () => {
         }
     }, [records, allEntries]);
 
+    /** Returns the current date and time formatted as a datetime-local string (YYYY-MM-DDTHH:MM) */
     const getTodayDateTime = () => {
         const today = new Date();
         const year = today.getFullYear();
@@ -187,6 +198,10 @@ const GateEntryManagement = () => {
         return `${year}-${month}-${day}T${hours}:${minutes}`;
     };
 
+    /**
+     * Parses a block location string in "BLOCK-ROW-COL" format.
+     * Returns an object with block, row, and col, or null if the format is invalid.
+     */
     const parseBlockLocation = (value: string): { block: string; row: number; col: number } | null => {
         const trimmed = value.trim();
         const parts = trimmed.split('-');
@@ -198,6 +213,10 @@ const GateEntryManagement = () => {
         return { block: block.toUpperCase(), row, col };
     };
 
+    /**
+     * Calculates the next available tier (elevation) for a given block/row/col location.
+     * Counts existing active (not gated-out) containers at that location, optionally excluding one record by ID.
+     */
     const calculateNextElevation = (block: string, row: number, col: number, excludeId?: number): number => {
         const matchingRecords = records.filter((r: any) =>
             r.block_location === block.toUpperCase() &&
@@ -209,6 +228,7 @@ const GateEntryManagement = () => {
         return matchingRecords.length + 1;
     };
 
+    /** Fetches all gate entry records from the API, filters out shipping line entries, and updates state */
     const fetchRecords = async () => {
         setIsLoading(true);
         try {
@@ -230,6 +250,7 @@ const GateEntryManagement = () => {
         }
     };
 
+    /** Formats an ISO date string into a readable US locale date-time string (MM/DD/YYYY, HH:MM AM/PM) */
     const formatDate = (dateString: string) => {
         if (!dateString) return '';
         const date = new Date(dateString);
@@ -239,6 +260,7 @@ const GateEntryManagement = () => {
         });
     };
 
+    /** Populates the form with an existing record's data and opens the modal in edit mode */
     const handleEdit = (record: any) => {
         setEditMode(true);
         setEditingRecordId(record.id);
@@ -254,7 +276,6 @@ const GateEntryManagement = () => {
             gate_in: `${year}-${month}-${day}T${hours}:${minutes}`,
             block_location: blockLocationFull,
             tier_location: record.tier_location || 1,
-            //  Only gate_in_payment_need is set upfront — gate out amount is entered at payment time
             gate_in_payment_need: record.gate_in_payment_need || 0,
             transaction_nbr: record.transaction_nbr || '',
             shipping_line: record.shipping_line || '',
@@ -284,6 +305,7 @@ const GateEntryManagement = () => {
         setIsModalOpen(true);
     };
 
+    /** Resets the form to default values and opens the modal in create (add new) mode */
     const handleAddNew = () => {
         setEditMode(false);
         setEditingRecordId(null);
@@ -291,7 +313,6 @@ const GateEntryManagement = () => {
             gate_in: getTodayDateTime(),
             block_location: 'XA-1-1',
             tier_location: 1,
-            //  Only gate_in_payment_need here — gate out amount is set later in the payment tab
             gate_in_payment_need: 0,
             transaction_nbr: records.length > 0 ? `${String(records.length + 1).padStart(6, '0')}` : '000001',
             shipping_line: '',
@@ -321,13 +342,16 @@ const GateEntryManagement = () => {
         setIsModalOpen(true);
     };
 
+    // Fields that should be automatically uppercased on input
     const UPPERCASE_FIELDS = new Set([
-        // 'container_no', 'booking_no', 'seal_no', 'iso_code',
-        // 'block_location', 'trans_creator', 'damage_code',
-        // 'entry_lane', 'exit_lane', 'transaction_nbr', 'plate_no'
         'container_no'
     ]);
-    
+
+    /**
+     * Handles individual form field changes.
+     * Uppercases values for fields in UPPERCASE_FIELDS.
+     * Auto-fills driver license when a driver name is selected.
+     */
     const handleFieldChange = (name: string, value: any) => {
         const normalizedValue = typeof value === 'string' && UPPERCASE_FIELDS.has(name)
             ? value.toUpperCase()
@@ -342,6 +366,7 @@ const GateEntryManagement = () => {
         }));
     };
 
+    /** Returns the array of field definitions used to render the dynamic gate entry form */
     const getFormFields = (): DynamicFormField[] => [
         {
             name: 'gate_in',
@@ -353,7 +378,6 @@ const GateEntryManagement = () => {
             value: initialFormValues.gate_in,
         },
         {
-            //  Only gate in payment amount is set here
             name: 'gate_in_payment_need',
             label: 'Gate In Payment Required (₱)',
             type: 'number',
@@ -362,7 +386,6 @@ const GateEntryManagement = () => {
             disabled: editMode,
             value: initialFormValues.gate_in_payment_need,
         },
-        //  payment_need (gate out) is REMOVED — admin enters it manually in the Gate Out Payment tab
         {
             name: 'block_location',
             label: 'Block Location (e.g. XA-1-1)',
@@ -370,7 +393,6 @@ const GateEntryManagement = () => {
             icon: MapPin,
             placeholder: 'XA-1-1',
             required: true,
-            // disabled: editMode,
             value: initialFormValues.block_location,
             datalist: datalistOptions.block_location,
             validation: (value: any) => {
@@ -593,6 +615,11 @@ const GateEntryManagement = () => {
         },
     ];
 
+    /**
+     * Handles form submission for both creating and updating a gate entry.
+     * Validates block location format and stack capacity before sending to the API.
+     * On success, closes the modal and refreshes the records list.
+     */
     const handleFormSubmit = async (data: Record<string, any>) => {
         setIsSubmitting(true);
         try {
@@ -611,6 +638,7 @@ const GateEntryManagement = () => {
             const { block, row, col } = parsed;
             const elevation = calculateNextElevation(block, row, col, editingRecordId || undefined);
 
+            // Prevent stacking more than 4 containers at the same location
             if (elevation > 4) {
                 await Swal.fire({
                     icon: 'warning',
@@ -625,7 +653,6 @@ const GateEntryManagement = () => {
 
             const submitData = {
                 ...data,
-                //  Only gate_in_payment_need is submitted — no payment_need
                 gate_in_payment_need: Number(data.gate_in_payment_need || 0),
                 gate_in: new Date(data.gate_in).toISOString(),
                 block_location: block,
@@ -670,6 +697,7 @@ const GateEntryManagement = () => {
         }
     };
 
+    /** Closes the form modal and resets all edit-related state */
     const handleFormCancel = () => {
         setIsModalOpen(false);
         setEditMode(false);
@@ -677,6 +705,10 @@ const GateEntryManagement = () => {
         setInitialFormValues({});
     };
 
+    /**
+     * Prompts the user for confirmation, then records a gate-out timestamp for the selected container.
+     * Refreshes the records list on success.
+     */
     const handleGateOut = async (record: any) => {
         const result = await Swal.fire({
             title: 'Confirm Gate Out',
@@ -708,6 +740,7 @@ const GateEntryManagement = () => {
         }
     };
 
+    // Column definitions for the DataTable, including renderers and export formatters
     const columns = [
         {
             key: 'gate_in', label: 'Gate In', sortable: true,
@@ -777,6 +810,7 @@ const GateEntryManagement = () => {
         }
     ];
 
+    /** Modal component that displays the full details of a selected gate entry record */
     const DetailModal = ({ record, onClose }: { record: any; onClose: () => void }) => {
         if (!record) return null;
         return (
@@ -832,6 +866,7 @@ const GateEntryManagement = () => {
         );
     };
 
+    /** Modal component that displays the previous (backup) version of a gate entry record */
     const BackupModal = ({ backup, onClose }: { backup: any; onClose: () => void }) => {
         if (!backup) return null;
         return (
@@ -947,6 +982,7 @@ const GateEntryManagement = () => {
                         <div className="mt-4 flex justify-end gap-2 no-print">
                             <button
                                 onClick={() => {
+                                    // Opens a new window and prints the receipt content formatted for 80mm thermal paper
                                     const printContents = document.querySelector('.receipt-root')?.innerHTML;
                                     if (!printContents) return;
                                     const win = window.open('', '_blank', 'width=400,height=600');

@@ -6,10 +6,15 @@ const Admin = require('../models/Admin');
 const router = express.Router();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'supersecretkey';
+// Roles allowed to be assigned to accounts
 const ALLOWED_ROLES = ['admin', 'user'];
 
-
-//  Middleware: requireAuth
+/**
+ * Middleware: requireAuth
+ * Validates the Bearer JWT from the Authorization header.
+ * Attaches the decoded admin ID to req.adminId on success.
+ * Returns 401 if the token is missing, malformed, or expired.
+ */
 const requireAuth = (req, res, next) => {
     try {
         const authHeader = req.headers.authorization;
@@ -25,8 +30,12 @@ const requireAuth = (req, res, next) => {
     }
 };
 
-
-//  Middleware: requireAdmin
+/**
+ * Middleware: requireAdmin
+ * Checks that the authenticated user has the 'admin' role.
+ * Must be used after requireAuth (depends on req.adminId).
+ * Returns 403 if the user is not an admin.
+ */
 const requireAdmin = async (req, res, next) => {
     try {
         const admin = await Admin.findByPk(req.adminId, { attributes: ['role'] });
@@ -39,8 +48,11 @@ const requireAdmin = async (req, res, next) => {
     }
 };
 
-
-//  GET /auth/me
+/**
+ * GET /auth/me
+ * Returns the profile of the currently authenticated user.
+ * Requires a valid auth token.
+ */
 router.get('/me', requireAuth, async (req, res) => {
     try {
         const admin = await Admin.findByPk(req.adminId, {
@@ -53,8 +65,11 @@ router.get('/me', requireAuth, async (req, res) => {
     }
 });
 
-
-//  GET /auth/get-all
+/**
+ * GET /auth/get-all
+ * Returns all admin/user accounts ordered by newest first.
+ * Restricted to authenticated admins only.
+ */
 router.get('/get-all', requireAuth, requireAdmin, async (req, res) => {
     try {
         const admins = await Admin.findAll({
@@ -67,8 +82,12 @@ router.get('/get-all', requireAuth, requireAdmin, async (req, res) => {
     }
 });
 
-
-//  POST /auth/login
+/**
+ * POST /auth/login
+ * Authenticates a user with email and password.
+ * Returns a signed JWT (8h expiry) and the user's profile on success.
+ * Returns 401 for invalid credentials.
+ */
 router.post('/login', async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -79,6 +98,7 @@ router.post('/login', async (req, res) => {
         const admin = await Admin.findOne({ where: { email } });
         if (!admin) return res.status(401).json({ success: false, message: 'Invalid email or password' });
 
+        // Compare the plain-text password against the stored bcrypt hash
         const isMatch = await bcrypt.compare(password, admin.password_hash);
         if (!isMatch) return res.status(401).json({ success: false, message: 'Invalid email or password' });
 
@@ -95,14 +115,22 @@ router.post('/login', async (req, res) => {
     }
 });
 
-
-//  POST /auth/logout
+/**
+ * POST /auth/logout
+ * Stateless logout — the client is responsible for discarding the token.
+ * Always returns success since JWTs are invalidated client-side.
+ */
 router.post('/logout', (req, res) => {
     res.status(200).json({ success: true });
 });
 
-
-//  POST /auth/create-admin
+/**
+ * POST /auth/create-admin
+ * Creates a new user or admin account.
+ * Requires name, email, and a password of at least 6 characters.
+ * Role defaults to 'user' if an unrecognised role is supplied.
+ * Restricted to authenticated admins only.
+ */
 router.post('/create-admin', requireAuth, requireAdmin, async (req, res) => {
     try {
         const { name, email, password, role } = req.body;
@@ -114,11 +142,13 @@ router.post('/create-admin', requireAuth, requireAdmin, async (req, res) => {
             return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
         }
 
+        // Prevent duplicate email registrations
         const existing = await Admin.findOne({ where: { email } });
         if (existing) {
             return res.status(409).json({ success: false, message: 'An account with this email already exists' });
         }
 
+        // Silently fall back to 'user' for any unrecognised role value
         const assignedRole = ALLOWED_ROLES.includes(role) ? role : 'user';
         const password_hash = await bcrypt.hash(password, 12);
         const newAdmin = await Admin.create({ name, email, password_hash, role: assignedRole });
@@ -133,8 +163,13 @@ router.post('/create-admin', requireAuth, requireAdmin, async (req, res) => {
     }
 });
 
-
-//  PUT /auth/update/:id
+/**
+ * PUT /auth/update/:id
+ * Updates the name, email, and/or role of an existing account.
+ * Checks for email uniqueness before applying changes.
+ * Ignores unrecognised role values, keeping the existing role instead.
+ * Restricted to authenticated admins only.
+ */
 router.put('/update/:id', requireAuth, requireAdmin, async (req, res) => {
     try {
         const admin = await Admin.findByPk(req.params.id);
@@ -142,6 +177,7 @@ router.put('/update/:id', requireAuth, requireAdmin, async (req, res) => {
 
         const { name, email, role } = req.body;
 
+        // Prevent changing to an email that is already taken by another account
         if (email && email !== admin.email) {
             const existing = await Admin.findOne({ where: { email } });
             if (existing) return res.status(409).json({ success: false, message: 'Email already in use' });
@@ -163,8 +199,12 @@ router.put('/update/:id', requireAuth, requireAdmin, async (req, res) => {
     }
 });
 
-
-// PUT /auth/reset-password/:id
+/**
+ * PUT /auth/reset-password/:id
+ * Replaces the password hash for a given account.
+ * Requires the new password to be at least 6 characters long.
+ * Restricted to authenticated admins only.
+ */
 router.put('/reset-password/:id', requireAuth, requireAdmin, async (req, res) => {
     try {
         const admin = await Admin.findByPk(req.params.id);
@@ -184,10 +224,15 @@ router.put('/reset-password/:id', requireAuth, requireAdmin, async (req, res) =>
     }
 });
 
-
-//  DELETE /auth/delete/:id
+/**
+ * DELETE /auth/delete/:id
+ * Permanently deletes an account by ID.
+ * Prevents an admin from deleting their own account.
+ * Restricted to authenticated admins only.
+ */
 router.delete('/delete/:id', requireAuth, requireAdmin, async (req, res) => {
     try {
+        // Guard: an admin cannot delete the account they are currently logged in as
         if (parseInt(req.params.id) === req.adminId) {
             return res.status(400).json({ success: false, message: 'Cannot delete your own account' });
         }
@@ -202,6 +247,7 @@ router.delete('/delete/:id', requireAuth, requireAdmin, async (req, res) => {
     }
 });
 
+// Export the router and middlewares for use in other route files
 module.exports = router;
 module.exports.requireAuth = requireAuth;
 module.exports.requireAdmin = requireAdmin;

@@ -10,11 +10,14 @@ interface ShippingLineRecord {
     id: number;
     code: string;
     name: string;
-    email: string; //  comma-separated, e.g. "a@x.com, b@x.com, c@x.com"
+    email: string; // comma-separated, e.g. "a@x.com, b@x.com, c@x.com"
     life_state: 'Active' | 'Inactive';
 }
 
-//  Validate every email in a comma-separated string
+/**
+ * Validates every email in a comma-separated string.
+ * Returns an error message string if any email is invalid, or null if all pass.
+ */
 const validateEmails = (value: string): string | null => {
     if (!value || !value.trim()) return null; // field is optional
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -23,7 +26,10 @@ const validateEmails = (value: string): string | null => {
     return null;
 };
 
-//  Normalise: trim each part, remove blanks, rejoin with ", "
+/**
+ * Normalises a comma-separated email string by trimming whitespace
+ * around each entry, removing blank entries, and rejoining with ", ".
+ */
 const normaliseEmails = (value: string): string =>
     value.split(',').map(e => e.trim()).filter(Boolean).join(', ');
 
@@ -37,8 +43,13 @@ const ShippingTab = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [initialFormValues, setInitialFormValues] = useState<Record<string, any>>({});
 
+    // Fetch records on initial mount
     useEffect(() => { fetchRecords(); }, []);
 
+    /**
+     * Fetches all shipping line records from the API
+     * and stores them in state. Shows an error alert on failure.
+     */
     const fetchRecords = async () => {
         setIsLoading(true);
         try {
@@ -58,6 +69,9 @@ const ShippingTab = () => {
         }
     };
 
+    /**
+     * Opens the modal in "Add" mode with blank form fields.
+     */
     const handleAddNew = () => {
         setEditMode(false);
         setEditingId(null);
@@ -65,6 +79,9 @@ const ShippingTab = () => {
         setIsModalOpen(true);
     };
 
+    /**
+     * Opens the modal in "Edit" mode pre-filled with the selected record's data.
+     */
     const handleEdit = (record: ShippingLineRecord) => {
         setEditMode(true);
         setEditingId(record.id);
@@ -77,6 +94,11 @@ const ShippingTab = () => {
         setIsModalOpen(true);
     };
 
+    /**
+     * Checks if the given code or name already exists in the records list.
+     * Skips the currently edited record when in edit mode.
+     * Returns the duplicate field and value if found, otherwise null.
+     */
     const checkDuplicates = (code: string, name: string): { field: string; value: string } | null => {
         const normCode = code.toUpperCase().trim();
         const normName = name.trim().toLowerCase();
@@ -88,6 +110,10 @@ const ShippingTab = () => {
         return null;
     };
 
+    /**
+     * Returns the field configuration array for the DynamicForm component,
+     * pre-populated with current initialFormValues.
+     */
     const getFormFields = (): DynamicFormField[] => [
         {
             name: 'code',
@@ -108,7 +134,7 @@ const ShippingTab = () => {
             value: initialFormValues.name,
         },
         {
-            //  type='text' so the browser accepts comma-separated values freely
+            // Uses type='text' so the browser freely accepts comma-separated values
             name: 'email',
             label: 'Email(s)',
             type: 'text',
@@ -116,7 +142,7 @@ const ShippingTab = () => {
             placeholder: 'ops@msc.com, notify@msc.com, billing@msc.com',
             required: false,
             value: initialFormValues.email,
-            validation: validateEmails,
+            validation: validateEmails, // runs inline validation on this field
         },
         {
             name: 'life_state',
@@ -131,7 +157,13 @@ const ShippingTab = () => {
         },
     ];
 
+    /**
+     * Handles form submission for both creating and updating a shipping line.
+     * Runs duplicate and email validation before sending the request.
+     * Shows success/error alerts and refreshes the records list on completion.
+     */
     const handleFormSubmit = async (data: Record<string, any>) => {
+        // Block submission if a duplicate code or name is detected
         const duplicate = checkDuplicates(data.code, data.name);
         if (duplicate) {
             await Swal.fire({
@@ -144,6 +176,7 @@ const ShippingTab = () => {
             return;
         }
 
+        // Block submission if any email in the field is malformed
         const emailError = validateEmails(data.email);
         if (emailError) {
             await Swal.fire({ icon: 'error', title: 'Invalid Email(s)', text: emailError, confirmButtonColor: '#ef4444' });
@@ -155,11 +188,12 @@ const ShippingTab = () => {
             const payload = {
                 code: data.code.toUpperCase().trim(),
                 name: data.name,
-                //  normalise then store; null when blank
+                // Normalise the email string; store null when blank
                 email: data.email ? normaliseEmails(data.email) : null,
                 life_state: data.life_state,
             };
 
+            // Send PUT for edits, POST for new entries
             const response = editMode && editingId
                 ? await RequestHandler.fetchData('PUT', `shipping-lines/update/${editingId}`, payload)
                 : await RequestHandler.fetchData('POST', 'shipping-lines/create', payload);
@@ -181,6 +215,9 @@ const ShippingTab = () => {
         }
     };
 
+    /**
+     * Closes the modal and resets all form-related state back to defaults.
+     */
     const handleFormCancel = () => {
         setIsModalOpen(false);
         setEditMode(false);
@@ -188,6 +225,10 @@ const ShippingTab = () => {
         setInitialFormValues({});
     };
 
+    /**
+     * Prompts the user for confirmation, then deletes the selected shipping line.
+     * Refreshes the records list after a successful deletion.
+     */
     const handleDelete = async (record: ShippingLineRecord) => {
         const result = await Swal.fire({
             title: 'Confirm Delete',
@@ -215,11 +256,16 @@ const ShippingTab = () => {
         }
     };
 
+    /**
+     * Toggles the life_state of a shipping line between 'Active' and 'Inactive'
+     * by sending a PUT request, then optimistically updates the local records state.
+     */
     const handleToggleLifeState = async (record: ShippingLineRecord) => {
         const newState: 'Active' | 'Inactive' = record.life_state === 'Active' ? 'Inactive' : 'Active';
         setIsSubmitting(true);
         try {
             await RequestHandler.fetchData('PUT', `shipping-lines/update/${record.id}`, { ...record, life_state: newState });
+            // Update only the affected record in state without re-fetching the full list
             setRecords(prev => prev.map(r => r.id === record.id ? { ...r, life_state: newState } : r));
         } catch {
             Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to update life state.' });
@@ -228,6 +274,7 @@ const ShippingTab = () => {
         }
     };
 
+    // Column definitions for the DataTable, including custom renderers and export formatters
     const columns = [
         {
             key: 'code', label: 'Code', sortable: true,
@@ -241,7 +288,7 @@ const ShippingTab = () => {
             key: 'email', label: 'Email(s)', sortable: true,
             render: (value: string) => {
                 if (!value) return <span className="text-sm text-slate-400 italic">—</span>;
-                //  Render each email as its own pill
+                // Render each email as its own pill badge
                 const emails = value.split(',').map(e => e.trim()).filter(Boolean);
                 return (
                     <div className="flex flex-col gap-1">
@@ -254,10 +301,11 @@ const ShippingTab = () => {
                     </div>
                 );
             },
-            exportRender: (value: string) => value || '—',
+            exportRender: (value: string) => value || '—', // plain text for exports
         },
         {
             key: 'life_state', label: 'Life State', sortable: true,
+            // Clickable badge that toggles the life state inline
             render: (value: string, row: ShippingLineRecord) => (
                 <button
                     onClick={(e) => { e.stopPropagation(); handleToggleLifeState(row); }}
@@ -276,6 +324,7 @@ const ShippingTab = () => {
         },
         {
             key: 'actions', label: 'Actions', sortable: false, filterable: false,
+            // Edit button visible to all; Delete button restricted to admin role only
             render: (_: any, row: ShippingLineRecord) => (
                 <div className="flex gap-2">
                     <button onClick={(e) => { e.stopPropagation(); handleEdit(row); }} className="px-3 py-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition text-sm font-semibold flex items-center gap-1">
@@ -288,7 +337,7 @@ const ShippingTab = () => {
                     )}
                 </div>
             ),
-            exportRender: () => '',
+            exportRender: () => '', // actions column is excluded from exports
         },
     ];
 
@@ -321,6 +370,7 @@ const ShippingTab = () => {
                 />
             </div>
 
+            {/* Add / Edit modal */}
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
                     <div className="bg-white rounded-2xl p-8 w-full max-w-2xl max-h-[90vh] overflow-y-auto">

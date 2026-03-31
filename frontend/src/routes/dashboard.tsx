@@ -5,12 +5,6 @@ import {
     XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import {
-    // Container, Truck, Ship, DoorOpen, Clock,
-    // CreditCard, Activity, LayoutDashboard, ArrowUpRight,
-    // ArrowDownRight, FileBarChart2, Calendar, CalendarDays,
-    // CalendarRange, Download, Printer, FileSpreadsheet,
-    // TrendingUp, CheckCircle2, AlertCircle, ChevronLeft,
-    // ChevronRight, Banknote, WalletCards, CircleDollarSign, Users,
     Container, DoorOpen, LayoutDashboard, ArrowUpRight,
     ArrowDownRight, FileBarChart2, Calendar, CalendarDays,
     CalendarRange, Download, Printer, FileSpreadsheet,
@@ -34,12 +28,28 @@ const ORANGE = '#f97316';
 const DARK   = '#0f172a';
 const PAYMENT_METHODS = ['CASH', 'BANK TRANSFER', 'CHECK', 'GCASH'];
 
+/**
+ * Formats a number as a Philippine Peso currency string with two decimal places.
+ * Returns '₱0.00' if the value is not a valid number.
+ *
+ * @param n - The numeric value to format
+ * @returns Formatted string e.g. '₱1,250.00'
+ */
 const fmt = (n: number) => {
     const v = Number(n);
     if (isNaN(v)) return '₱0.00';
     return `₱${v.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
+/**
+ * Formats a number as a compact Philippine Peso string, abbreviating large values.
+ * - Values ≥ 1,000,000 are shown as ₱X.XXM
+ * - Values ≥ 1,000 are shown as ₱X.XK
+ * - Returns '₱0' for zero or invalid values
+ *
+ * @param n - The numeric value to format
+ * @returns Compact string e.g. '₱1.5M', '₱250.0K', '₱500'
+ */
 const fmtShort = (n: number) => {
     const v = Number(n);
     if (isNaN(v) || v === 0) return '₱0';
@@ -48,16 +58,33 @@ const fmtShort = (n: number) => {
          : `₱${Math.round(v)}`;
 };
 
-// Helper: safely parse a payment amount field
+/**
+ * Safely converts an unknown value to a number.
+ * Returns 0 if the value is not a valid number (e.g. null, undefined, empty string).
+ *
+ * @param val - Any value to coerce, typically a payment amount field from the API
+ * @returns The numeric value, or 0 if conversion fails
+ */
 const toNum = (val: unknown): number => {
     const n = Number(val);
     return isNaN(n) ? 0 : n;
 };
 
 // ─── Skeleton ──────────────────────────────────────────────────────────────────
+
+/**
+ * Renders a single animated placeholder block used while content is loading.
+ *
+ * @param className - Additional Tailwind classes to control the block's size and shape
+ */
 function Skeleton({ className = '' }: { className?: string }) {
     return <div className={`animate-pulse bg-slate-200 rounded-xl ${className}`} />;
 }
+
+/**
+ * Renders the full dashboard loading state — a set of skeleton blocks
+ * matching the approximate layout of the metric cards and chart panels.
+ */
 function DashboardSkeleton() {
     return (
         <div className="space-y-5">
@@ -69,6 +96,13 @@ function DashboardSkeleton() {
 }
 
 // ─── Shared UI ─────────────────────────────────────────────────────────────────
+
+/**
+ * Renders a small colored badge for an entity's status (e.g. paid, unpaid, active, banned).
+ * Falls back to a neutral gray style for unrecognized status values.
+ *
+ * @param status - The status string to display (e.g. 'paid', 'unpaid', 'active', 'banned')
+ */
 function StatusPill({ status }: { status: string }) {
     const map: Record<string,string> = {
         paid:'bg-emerald-50 text-emerald-700 border-emerald-200', unpaid:'bg-amber-50 text-amber-700 border-amber-200',
@@ -79,6 +113,15 @@ function StatusPill({ status }: { status: string }) {
     return <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${map[status]??'bg-slate-100 text-slate-500 border-slate-200'}`}>{status}</span>;
 }
 
+/**
+ * Custom tooltip component used by Recharts charts.
+ * Renders a dark card showing the hovered data point's label and all series values.
+ * Large numbers are automatically abbreviated using fmtShort().
+ *
+ * @param active - Whether the tooltip is currently visible (provided by Recharts)
+ * @param payload - Array of data series entries for the hovered point
+ * @param label - The X-axis label for the hovered point
+ */
 function ChartTip({ active, payload, label }: any) {
     if (!active||!payload?.length) return null;
     return (
@@ -91,6 +134,16 @@ function ChartTip({ active, payload, label }: any) {
     );
 }
 
+/**
+ * A reusable card container with a header section (title, optional subtitle, optional badge)
+ * and a padded content area. Used throughout the dashboard for charts and data sections.
+ *
+ * @param title - The panel heading text
+ * @param sub - Optional subtitle shown below the heading in a smaller style
+ * @param children - The panel body content (charts, lists, tables, etc.)
+ * @param badge - Optional React node rendered on the right side of the header (e.g. a count pill)
+ * @param className - Additional Tailwind classes for the outer wrapper
+ */
 function Panel({ title, sub, children, badge, className='' }: { title:string; sub?:string; children:React.ReactNode; badge?:React.ReactNode; className?:string }) {
     return (
         <div className={`bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden ${className}`}>
@@ -106,6 +159,18 @@ function Panel({ title, sub, children, badge, className='' }: { title:string; su
     );
 }
 
+/**
+ * Displays a single KPI metric as a card with a label, primary value, optional subtitle,
+ * an icon, an accent color bar across the top, and an optional trend indicator.
+ *
+ * @param label - Short uppercase label describing the metric (e.g. 'Gate Entries Today')
+ * @param value - The primary display value (number or pre-formatted string)
+ * @param sub - Optional secondary text shown below the value (e.g. 'As of last sync')
+ * @param trend - Optional trend direction: 'up', 'down', or 'neutral'
+ * @param trendValue - The trend label string shown next to the trend arrow
+ * @param icon - Icon element displayed on the right side of the card
+ * @param accent - Hex color used for the top border and icon background tint (defaults to orange)
+ */
 function MetricCard({ label, value, sub, trend, trendValue, icon, accent=ORANGE }: { label:string; value:string|number; sub?:string; trend?:'up'|'down'|'neutral'; trendValue?:string; icon:React.ReactNode; accent?:string }) {
     return (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 relative overflow-hidden hover:shadow-md transition-shadow">
@@ -128,39 +193,61 @@ function MetricCard({ label, value, sub, trend, trendValue, icon, accent=ORANGE 
 }
 
 // ─── Overview Tab ───────────────────────────────────────────────────────────────
+
+/**
+ * Renders the Overview tab of the dashboard, showing high-level yard operations metrics.
+ *
+ * Includes:
+ * - KPI metric cards (today's gate entries, active containers, drivers, monthly revenue)
+ * - A 7-day bar chart of gate-in vs gate-out traffic
+ * - A pie chart of shipping line volumes for the current month
+ * - A 6-month area chart of revenue trend
+ * - A transport company share breakdown
+ * - A shipping lines registry list
+ *
+ * @param data - The full dashboard data object containing gate entries, drivers,
+ *               shipping lines, and transport companies
+ */
 function OverviewTab({ data }: { data: DashboardData }) {
     const { gateEntries, shippingLines, drivers, transportCompanies } = data;
     const today = new Date();
+
+    // Filter gate entries to today's range and the current month
     const todayEntries = filterByRange(gateEntries, startOf(today,'day'), endOf(today,'day'));
     const monthEntries = filterByRange(gateEntries, startOf(today,'month'), endOf(today,'month'));
+
+    // Containers currently in the yard are those without a gate-out timestamp
     const activeInYard = gateEntries.filter(e=>!e.gate_out);
-    // FIX: use toNum() to safely coerce string amounts
+
+    // Sum both gate-in and gate-out payment amounts for the month's total revenue
     const monthRevenue = monthEntries.reduce((s,e)=>s+toNum(e.gate_in_payment_amount)+toNum(e.payment_amount),0);
 
+    // Build last-7-days traffic data for the bar chart
     const weeklyData = Array.from({length:7},(_,i)=>{
         const d=new Date(today); d.setDate(d.getDate()-(6-i));
         const es=filterByRange(gateEntries,startOf(d,'day'),endOf(d,'day'));
         return { day:d.toLocaleDateString('en-PH',{weekday:'short'}), gateIn:es.length, gateOut:es.filter(e=>e.gate_out).length };
     });
 
+    // Build pie chart data — count this month's entries per shipping line, top 6 only
     const shippingData = shippingLines.map((sl,i)=>({
         name:sl.name, value:monthEntries.filter(e=>e.shipping_line===sl.name).length,
         color:[ORANGE,'#ea580c','#fb923c','#fdba74','#1e293b','#94a3b8'][i%6],
     })).filter(s=>s.value>0).sort((a,b)=>b.value-a.value).slice(0,6);
 
+    // Build transport company entry counts for the progress bar list
     const companyData = transportCompanies.map(c=>({ name:c.name, entries:monthEntries.filter(e=>e.transport_company===c.name).length })).sort((a,b)=>b.entries-a.entries);
     const companyTotal = companyData.reduce((s,c)=>s+c.entries,0);
 
+    // Build 6-month revenue trend data for the area chart
     const trendData = Array.from({length:6},(_,i)=>{
         const d=new Date(today); d.setMonth(d.getMonth()-(5-i));
         const es=filterByRange(gateEntries,startOf(d,'month'),endOf(d,'month'));
-        // FIX: use toNum() to safely coerce string amounts
         return { month:d.toLocaleDateString('en-PH',{month:'short'}), entries:es.length, revenue:es.reduce((s,e)=>s+toNum(e.gate_in_payment_amount)+toNum(e.payment_amount),0) };
     });
 
-    // const activeDrivers  = drivers.filter(d=>d.status==='active'&&d.lifeState==='active').length;
-    const bannedDrivers  = drivers.filter(d=>d.status==='banned').length;
-    const deceasedDrivers= drivers.filter(d=>d.lifeState==='deceased').length;
+    const bannedDrivers   = drivers.filter(d=>d.status==='banned').length;
+    const deceasedDrivers = drivers.filter(d=>d.lifeState==='deceased').length;
 
     return (
         <div className="space-y-5">
@@ -234,23 +321,6 @@ function OverviewTab({ data }: { data: DashboardData }) {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* <Panel title="DRIVERS" sub={`${activeDrivers} active · ${bannedDrivers} banned · ${deceasedDrivers} deceased`}
-                    badge={<span className="text-[10px] font-bold bg-orange-50 text-orange-700 border border-orange-200 px-2 py-0.5 rounded-md">{drivers.length} total</span>}>
-                    <div className="space-y-2">{drivers.slice(0,6).map((d,i)=>{
-                        const bg=d.status==='banned'?'#fef2f2':d.lifeState==='deceased'?'#f8fafc':'#fff7ed';
-                        const fg=d.status==='banned'?'#dc2626':d.lifeState==='deceased'?'#94a3b8':ORANGE;
-                        const ini=d.name.split(' ').map((w:string)=>w[0]).join('').slice(0,2).toUpperCase();
-                        return (
-                            <div key={i} className="flex items-center gap-3 p-2 rounded-xl hover:bg-slate-50 transition-colors">
-                                <div className="w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-black flex-shrink-0" style={{background:bg,color:fg}}>{ini}</div>
-                                <div className="flex-1 min-w-0"><p className="text-xs font-semibold text-slate-800 truncate">{d.name}</p><p className="text-[10px] text-slate-400">{d.licenseNumber}</p></div>
-                                <StatusPill status={d.status==='banned'?'banned':d.lifeState==='deceased'?'deceased':'active'}/>
-                            </div>
-                        );
-                    })}
-                    {drivers.length>6&&<p className="text-xs text-slate-400 text-center pt-1">+{drivers.length-6} more drivers</p>}
-                    </div>
-                </Panel> */}
                 <Panel title="SHIPPING LINES" sub="All registered carriers"
                     badge={<span className="text-[10px] font-bold bg-orange-50 text-orange-700 border border-orange-200 px-2 py-0.5 rounded-md">{shippingLines.length} lines</span>}>
                     <div className="space-y-2">{shippingLines.slice(0,6).map((s,i)=>(
@@ -269,20 +339,44 @@ function OverviewTab({ data }: { data: DashboardData }) {
 }
 
 // ─── Reports Tab ───────────────────────────────────────────────────────────────
+
+/**
+ * Renders the Payment Reports tab, allowing users to view and export payment data
+ * broken down by daily, weekly, or monthly periods with backward/forward navigation.
+ *
+ * Includes:
+ * - Period selector (Daily / Weekly / Monthly) with prev/next navigation
+ * - KPI cards for gate-in collected, gate-out collected, total collections, and unpaid
+ * - Gate-in and gate-out payment status breakdowns with collection rate bars
+ * - A bar chart of hourly/daily/weekly collections
+ * - A payment method breakdown panel
+ * - A paginated transactions table (capped at 100 rows, full data via export)
+ * - Export actions: Excel, CSV, and Print
+ *
+ * @param gateEntries - Full array of gate entry records used to derive all report data
+ */
 function ReportsTab({ gateEntries }: { gateEntries: GateEntry[] }) {
     const [period, setPeriod] = useState<ReportPeriod>('daily');
+
+    // cursor offsets the selected period: 0 = current, -1 = previous, +1 = next
     const [cursor, setCursor] = useState(0);
     const today = new Date();
 
+    /**
+     * Derives the current report period's label, date range, chart data, and previous period label
+     * based on the selected period type (daily/weekly/monthly) and the cursor offset.
+     * Memoized to avoid recomputation on unrelated re-renders.
+     */
     const { label, rangeStart, rangeEnd, chartData, prevLabel } = useMemo(()=>{
         const ref=new Date(today);
         if (period==='daily') {
             ref.setDate(ref.getDate()+cursor);
             const rs=startOf(ref,'day'), re=endOf(ref,'day');
+
+            // Build hourly buckets from 05:00 to 22:00
             const hours=Array.from({length:18},(_,i)=>{
                 const h=i+5;
                 const bucket=gateEntries.filter(e=>{const d=new Date(e.gate_in);return d>=rs&&d<=re&&d.getHours()===h;});
-                // FIX: use toNum() to safely coerce string amounts
                 return { label:`${h.toString().padStart(2,'0')}:00`, entries:bucket.length, gateInPaid:bucket.reduce((s,e)=>s+toNum(e.gate_in_payment_amount),0), gateOutPaid:bucket.reduce((s,e)=>s+toNum(e.payment_amount),0) };
             });
             const prev=new Date(ref); prev.setDate(prev.getDate()-1);
@@ -291,14 +385,17 @@ function ReportsTab({ gateEntries }: { gateEntries: GateEntry[] }) {
         if (period==='weekly') {
             ref.setDate(ref.getDate()+cursor*7);
             const rs=startOf(ref,'week'), re=endOf(ref,'week');
+
+            // Build one bucket per day of the selected week
             const days=Array.from({length:7},(_,i)=>{
                 const d=new Date(rs); d.setDate(rs.getDate()+i);
                 const bucket=filterByRange(gateEntries,startOf(d,'day'),endOf(d,'day'));
-                // FIX: use toNum() to safely coerce string amounts
                 return { label:d.toLocaleDateString('en-PH',{weekday:'short',month:'short',day:'numeric'}), entries:bucket.length, gateInPaid:bucket.reduce((s,e)=>s+toNum(e.gate_in_payment_amount),0), gateOutPaid:bucket.reduce((s,e)=>s+toNum(e.payment_amount),0) };
             });
             return { label:`Week of ${rs.toLocaleDateString('en-PH',{month:'short',day:'numeric'})} – ${re.toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'})}`, rangeStart:rs, rangeEnd:re, chartData:days, prevLabel:'Previous week' };
         }
+
+        // Monthly: build one bucket per calendar week (up to 5 weeks)
         ref.setMonth(ref.getMonth()+cursor);
         const rs=startOf(ref,'month'), re=endOf(ref,'month');
         const weeks=[1,2,3,4,5].map(w=>{
@@ -306,22 +403,30 @@ function ReportsTab({ gateEntries }: { gateEntries: GateEntry[] }) {
             const wEnd=new Date(rs); wEnd.setDate(Math.min(w*7,re.getDate())); wEnd.setHours(23,59,59,999);
             if (wStart>re) return null;
             const bucket=filterByRange(gateEntries,wStart,wEnd);
-            // FIX: use toNum() to safely coerce string amounts
             return { label:`Week ${w}`, entries:bucket.length, gateInPaid:bucket.reduce((s,e)=>s+toNum(e.gate_in_payment_amount),0), gateOutPaid:bucket.reduce((s,e)=>s+toNum(e.payment_amount),0) };
         }).filter(Boolean) as {label:string;entries:number;gateInPaid:number;gateOutPaid:number}[];
         const prev=new Date(ref); prev.setMonth(prev.getMonth()-1);
         return { label:ref.toLocaleDateString('en-PH',{month:'long',year:'numeric'}), rangeStart:rs, rangeEnd:re, chartData:weeks, prevLabel:prev.toLocaleDateString('en-PH',{month:'long',year:'numeric'}) };
     },[period,cursor,gateEntries]);
 
+    // All gate entries that fall within the selected period's date range
     const rangeEntries = useMemo(()=>filterByRange(gateEntries,rangeStart,rangeEnd),[gateEntries,rangeStart,rangeEnd]);
+
+    // Aggregated payment KPIs (totals, counts, collection rate) for the period
     const kpi = useMemo(()=>computePaymentSummary(rangeEntries),[rangeEntries]);
+
+    // Group payment amounts by method (Cash, Bank Transfer, Check, GCash) — only show methods with activity
     const methodBreakdown = PAYMENT_METHODS.map(m=>({
         name:m,
-        // FIX: use toNum() to safely coerce string amounts
         gateIn:rangeEntries.filter(e=>e.gate_in_payment_method===m).reduce((s,e)=>s+toNum(e.gate_in_payment_amount),0),
         gateOut:rangeEntries.filter(e=>e.payment_method===m).reduce((s,e)=>s+toNum(e.payment_amount),0),
     })).filter(m=>m.gateIn+m.gateOut>0);
 
+    /**
+     * Exports the current period's entries to an Excel (.xlsx) file.
+     * Generates two sheets: a Summary sheet with KPI totals and
+     * a Transactions sheet with one row per gate entry.
+     */
     const handleExportExcel = () => {
         const rows=rangeEntries.map(e=>({'Container No':e.container_no,'Shipping Line':e.shipping_line,'Transport Co.':e.transport_company,'Driver':e.drivers_name,'Move Type':e.move_type,'Gate In':new Date(e.gate_in).toLocaleString('en-PH'),'Gate Out':e.gate_out?new Date(e.gate_out).toLocaleString('en-PH'):'','GI Status':e.gate_in_payment_status,'GI Amount':toNum(e.gate_in_payment_amount),'GI Method':e.gate_in_payment_method??'','GI Reference':e.gate_in_payment_reference??'','GO Status':e.payment_status,'GO Amount':toNum(e.payment_amount),'GO Method':e.payment_method??'','GO Reference':e.payment_reference??'','Total Collected':toNum(e.gate_in_payment_amount)+toNum(e.payment_amount)}));
         const summary=[{Metric:'Report Period',Value:label},{Metric:'Total Entries',Value:rangeEntries.length},{Metric:'Gate-In Collected',Value:kpi.totalGateIn},{Metric:'Gate-Out Collected',Value:kpi.totalGateOut},{Metric:'Total Collections',Value:kpi.totalRevenue},{Metric:'Unpaid Gate-In',Value:kpi.totalUnpaidGateIn},{Metric:'Unpaid Gate-Out',Value:kpi.totalUnpaidGateOut}];
@@ -331,6 +436,11 @@ function ReportsTab({ gateEntries }: { gateEntries: GateEntry[] }) {
         XLSX.writeFile(wb,`Payment_Report_${period}_${new Date().toISOString().split('T')[0]}.xlsx`);
     };
 
+    /**
+     * Exports the current period's entries to a CSV file.
+     * Values containing commas are wrapped in double quotes.
+     * Triggers a browser download via a temporary anchor element.
+     */
     const handleExportCSV = () => {
         const headers=['Container No','Shipping Line','Transport Co.','Driver','Move Type','Gate In','Gate Out','GI Status','GI Amount','GI Method','GO Status','GO Amount','GO Method','Total'];
         const rows=rangeEntries.map(e=>[e.container_no,e.shipping_line,e.transport_company,e.drivers_name,e.move_type,new Date(e.gate_in).toLocaleString('en-PH'),e.gate_out?new Date(e.gate_out).toLocaleString('en-PH'):'',e.gate_in_payment_status,toNum(e.gate_in_payment_amount),e.gate_in_payment_method??'',e.payment_status,toNum(e.payment_amount),e.payment_method??'',toNum(e.gate_in_payment_amount)+toNum(e.payment_amount)].map(v=>{const s=String(v);return s.includes(',')?`"${s.replace(/"/g,'""')}"`  :s;}).join(','));
@@ -339,6 +449,11 @@ function ReportsTab({ gateEntries }: { gateEntries: GateEntry[] }) {
         const a=document.createElement('a'); a.href=url; a.download=`Payment_Report_${period}_${new Date().toISOString().split('T')[0]}.csv`; a.click(); URL.revokeObjectURL(url);
     };
 
+    /**
+     * Opens a new browser window with a fully self-contained, print-ready HTML report
+     * for the current period. Includes KPI summary cards and a full transactions table,
+     * then triggers the browser's print dialog automatically after a short delay.
+     */
     const handlePrint = () => {
         const win=window.open('','_blank'); if(!win) return;
         win.document.write(`<!DOCTYPE html><html><head><title>Payment Report — ${label}</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;padding:28px;color:#0f172a;font-size:12px}.header{border-bottom:3px solid #f97316;padding-bottom:10px;margin-bottom:18px}.header h1{font-size:22px;font-weight:900}.sub{font-size:11px;color:#64748b;margin-top:3px}.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}.kpi{border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;border-top:3px solid #f97316}.kpi .lbl{font-size:9px;text-transform:uppercase;letter-spacing:.07em;color:#64748b;margin-bottom:4px}.kpi .val{font-size:18px;font-weight:900}.kpi.warn .val{color:#d97706}.sec{font-size:12px;font-weight:700;border-left:3px solid #f97316;padding-left:8px;margin:18px 0 8px}table{width:100%;border-collapse:collapse;font-size:10px}th{background:#0f172a;color:white;padding:7px 8px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.05em}td{padding:5px 8px;border-bottom:1px solid #f1f5f9}tr:nth-child(even) td{background:#f8fafc}.paid{color:#16a34a;font-weight:700;text-transform:uppercase}.unpaid{color:#d97706;font-weight:700;text-transform:uppercase}.tot{font-weight:900;color:#f97316}.footer{margin-top:24px;text-align:center;font-size:9px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:10px}</style></head><body>
@@ -438,7 +553,6 @@ function ReportsTab({ gateEntries }: { gateEntries: GateEntry[] }) {
                                         <td className="py-2.5 px-4 text-slate-600 whitespace-nowrap">{r.drivers_name}</td>
                                         <td className="py-2.5 px-4 text-slate-500 whitespace-nowrap">{new Date(r.gate_in).toLocaleString('en-PH')}</td>
                                         <td className="py-2.5 px-4"><StatusPill status={r.gate_in_payment_status}/></td>
-                                        {/* FIX: use toNum() to safely coerce string amounts */}
                                         <td className="py-2.5 px-4 font-semibold text-slate-800 whitespace-nowrap">{toNum(r.gate_in_payment_amount)?fmt(toNum(r.gate_in_payment_amount)):'—'}</td>
                                         <td className="py-2.5 px-4"><StatusPill status={r.payment_status}/></td>
                                         <td className="py-2.5 px-4 font-semibold text-slate-800 whitespace-nowrap">{toNum(r.payment_amount)?fmt(toNum(r.payment_amount)):'—'}</td>
@@ -456,18 +570,33 @@ function ReportsTab({ gateEntries }: { gateEntries: GateEntry[] }) {
 }
 
 // ─── Root ───────────────────────────────────────────────────────────────────────
-export default function Dashboard() {
-    const [tab,setTab]       = useState<TabKey>('overview');
-    const [clock,setClock]   = useState('');
-    const [data,setData]     = useState<DashboardData|null>(null);
-    const [loading,setLoading] = useState(true);
-    const [error,setError]   = useState<string|null>(null);
 
+/**
+ * Root Dashboard component — the top-level page for the Yard Operations Dashboard.
+ *
+ * Responsibilities:
+ * - Fetches all dashboard data on mount via fetchDashboardData()
+ * - Maintains a live clock that updates every second
+ * - Manages the active tab (Overview / Payment Reports)
+ * - Renders the header bar, tab navigation, and the active tab's content
+ * - Shows a skeleton loader while data is loading and an error state on failure
+ * - Renders a branded footer bar when data is successfully loaded
+ */
+export default function Dashboard() {
+    const [tab,setTab]         = useState<TabKey>('overview');
+    const [clock,setClock]     = useState('');
+    const [data,setData]       = useState<DashboardData|null>(null);
+    const [loading,setLoading] = useState(true);
+    const [error,setError]     = useState<string|null>(null);
+
+    // Start a 1-second interval to keep the displayed clock current
     useEffect(()=>{
         const tick=()=>setClock(new Date().toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit',second:'2-digit'}));
         tick(); const id=setInterval(tick,1000); return ()=>clearInterval(id);
     },[]);
 
+    // Fetch dashboard data on mount; use a cancellation flag to avoid
+    // setting state on an unmounted component if the fetch resolves late
     useEffect(()=>{
         let cancelled=false;
         setLoading(true); setError(null);
@@ -477,14 +606,10 @@ export default function Dashboard() {
         return ()=>{cancelled=true;};
     },[]);
 
-    // const footerStats = data?[
-    //     {icon:<Clock size={14}/>,      val:data.gateEntries.length>0?(data.gateEntries.reduce((s,e)=>s+(e.days_in_yard??0),0)/data.gateEntries.length).toFixed(1):'0', lbl:'Avg Days in Yard'},
-    //     {icon:<Activity size={14}/>,   val:`${data.transportCompanies.filter(c=>c.status==='active').length}`, lbl:'Active Companies'},
-    //     {icon:<Ship size={14}/>,       val:`${data.shippingLines.filter(s=>s.life_state==='Active').length}`, lbl:'Active Lines'},
-    //     {icon:<Truck size={14}/>,      val:`${data.drivers.filter(d=>d.status==='active').length}`, lbl:'Active Drivers'},
-    // ]:[];
-
-    const tabs=[{key:'overview' as TabKey,label:'Overview',icon:<LayoutDashboard size={16}/>},{key:'reports' as TabKey,label:'Payment Reports',icon:<FileBarChart2 size={16}/>}];
+    const tabs=[
+        {key:'overview' as TabKey,label:'Overview',icon:<LayoutDashboard size={16}/>},
+        {key:'reports'  as TabKey,label:'Payment Reports',icon:<FileBarChart2 size={16}/>},
+    ];
 
     return (
         <>
@@ -500,6 +625,7 @@ export default function Dashboard() {
                             </div>
                         </div>
                         <div className="flex items-center gap-4">
+                            {/* Live status indicator — pulses orange while data is loaded, shows ERROR on failure */}
                             <div className="flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-bold" style={{background:'rgba(249,115,22,0.15)',color:ORANGE,border:'1px solid rgba(249,115,22,0.3)'}}>
                                 <span className="w-2 h-2 rounded-full animate-pulse" style={{background:ORANGE}}/>{loading?'LOADING…':error?'ERROR':'LIVE'}
                             </div>
@@ -512,6 +638,7 @@ export default function Dashboard() {
                     <div className="flex gap-1">{tabs.map(t=>(
                         <button key={t.key} onClick={()=>setTab(t.key)} className={`flex items-center gap-2 px-5 py-2.5 rounded-t-xl text-sm font-bold transition-all ${tab===t.key?'bg-slate-100 text-slate-900':'text-slate-400 hover:text-slate-200'}`}>
                             <span style={{color:tab===t.key?ORANGE:'inherit'}}>{t.icon}</span>{t.label}
+                            {/* Show a "NEW" badge on the Reports tab when it is not currently active */}
                             {t.key==='reports'&&tab!=='reports'&&<span className="ml-1 text-[9px] font-black px-1.5 py-0.5 rounded-full text-white" style={{background:ORANGE}}>NEW</span>}
                         </button>
                     ))}</div>
@@ -529,17 +656,9 @@ export default function Dashboard() {
                     {!loading&&!error&&data&&(tab==='overview'?<OverviewTab data={data}/>:<ReportsTab gateEntries={data.gateEntries}/>)}
                 </div>
 
+                {/* Footer bar — only rendered after a successful data load */}
                 {!loading&&!error&&data&&(
                     <div className="mx-6 mb-6 rounded-2xl overflow-hidden shadow-lg">
-                        {/* <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 px-6 py-4 grid grid-cols-3 md:grid-cols-6 gap-4">
-                            {footerStats.map((s,i)=>(
-                                <div key={i} className="text-center">
-                                    <div className="flex items-center justify-center mb-1" style={{color:ORANGE}}>{s.icon}</div>
-                                    <p style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:22,letterSpacing:'0.04em'}} className="font-black text-white">{s.val}</p>
-                                    <p className="text-slate-500 uppercase tracking-widest" style={{fontSize:9}}>{s.lbl}</p>
-                                </div>
-                            ))}
-                        </div> */}
                         <div className="px-6 py-2 flex items-center justify-between" style={{background:ORANGE}}>
                             <p className="text-white text-xs font-bold uppercase tracking-widest">Yard Operations Dashboard</p>
                             <p className="text-orange-100 text-xs">{new Date().toLocaleDateString('en-PH',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</p>

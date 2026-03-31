@@ -4,35 +4,53 @@ const serverless = require("serverless-http");
 const path = require("path");
 const { sequelize, GateEntry } = require("../models/models.js");
 const bodyParser = require("body-parser");
-const sendEmail = require('../utils/sendEmail.js'); // adjust p
+const sendEmail = require('../utils/sendEmail.js');
 const session = require('express-session');
-//ath as needed
 
 const app = express();
 const router = express.Router();
 
-// CORS CONFIGURATION
+// ─── CORS CONFIGURATION ───────────────────────────────────────────────────────
+// In development mode, restrict CORS to a specific origin with credentials.
+// In production, allow all origins (Netlify handles access control).
 const DEVELOPMENT = false;
 if (DEVELOPMENT) {
-	app.use(
-		cors({
-			origin: "",
-			credentials: true,
-			optionSuccessStatus: 200,
-		})
-	);
+    app.use(
+        cors({
+            origin: "",           // Set to the dev frontend URL when needed
+            credentials: true,
+            optionSuccessStatus: 200,
+        })
+    );
 } else {
-	app.use(cors());
+    app.use(cors());
 }
 
-// ALL ROUTES
+// ─── UTILITY / DEBUG ROUTES ───────────────────────────────────────────────────
+
+/**
+ * GET /test
+ * Simple health-check endpoint to verify the API is reachable.
+ */
 router.get("/test", async (req, res) => {
-	res.status(200).json("This is a test endpoint.");
+    res.status(200).json("This is a test endpoint.");
 });
+
+/**
+ * GET /reset
+ * Drops and recreates all database tables via Sequelize sync.
+ * WARNING: Destructive — for development/testing use only.
+ */
 router.get("/reset", async (req, res) => {
-	await sequelize.sync({ force: true });
-	res.send("Database reset successful.");
+    await sequelize.sync({ force: true });
+    res.send("Database reset successful.");
 });
+
+/**
+ * GET /test-shipping
+ * Creates a temporary ShippingLine record to verify the model and DB connection.
+ * For development/debugging use only.
+ */
 router.get("/test-shipping", async (req, res) => {
     try {
         const ShippingLine = require('../models/ShippingLine');
@@ -47,7 +65,12 @@ router.get("/test-shipping", async (req, res) => {
     }
 });
 
-
+/**
+ * GET /test-email
+ * Sends a test email to a hardcoded list of addresses to verify
+ * that the email transport (sendEmail utility) is configured correctly.
+ * All send failures are non-blocking and logged individually.
+ */
 router.get('/test-email', async (req, res) => {
     try {
         const subject = 'Test Email – Shipping Management System';
@@ -74,12 +97,14 @@ router.get('/test-email', async (req, res) => {
             </div>
         `;
 
+        // Hardcoded test recipient list — replace or move to env vars as needed
         const emailList = [
             "jdmaster888@gmail.com",
             "enegue4444@gmail.com",
             "nohjpega100@gmail.com"
         ];
-        
+
+        // Fire all sends concurrently; individual failures don't abort the others
         await Promise.all(
             emailList.map((address, i) =>
                 sendEmail(address, subject, text, html)
@@ -88,6 +113,7 @@ router.get('/test-email', async (req, res) => {
                     })
             )
         );
+
         res.status(200).json({ success: true, message: `Test email sent.` });
     } catch (error) {
         console.error('Test email failed:', error);
@@ -95,33 +121,36 @@ router.get('/test-email', async (req, res) => {
     }
 });
 
-
-
-// Add this BEFORE your router.use() lines
+// ─── ROUTE REGISTRATION ───────────────────────────────────────────────────────
+// Debug log to confirm GateEntryRoutes loaded correctly before mounting
 console.log("GateEntryRoutes type:", typeof require("../routes/GateEntryRoutes.js"));
-// console.log("ShippingLineRouter type:", typeof require("../routes/ShippingLineRouter.js"));
 
-router.use("/gate-entry", require("../routes/GateEntryRoutes.js"));
-router.use('/shipping-lines', require('../routes/ShippingLineRouter.js'));
-router.use('/drivers', require('../routes/DriverRouter.js'));
-router.use('/plate-numbers', require('../routes/PlateNumberRouter.js'));
-router.use("/transport-companies", require("../routes/TransportCompanyRouter.js"));
-const authRouter = require('../routes/AuthRouter.js');
-router.use('/auth', authRouter);
+router.use("/gate-entry",           require("../routes/GateEntryRoutes.js"));
+router.use('/shipping-lines',       require('../routes/ShippingLineRouter.js'));
+router.use('/drivers',              require('../routes/DriverRouter.js'));
+router.use('/plate-numbers',        require('../routes/PlateNumberRouter.js'));
+router.use("/transport-companies",  require("../routes/TransportCompanyRouter.js"));
+router.use('/auth',                 require('../routes/AuthRouter.js'));
 
+// ─── SESSION CONFIGURATION ────────────────────────────────────────────────────
+// Session lifetime is 8 hours, matching the JWT expiry in AuthRouter.
+// Note: secure: false is intentional for HTTP environments (e.g. local / Netlify dev).
 app.use(session({
-    secret: 'your-secret-key',
+    secret: 'your-secret-key',      // TODO: move to an environment variable
     resave: false,
     saveUninitialized: false,
     cookie: { secure: false, maxAge: 1000 * 60 * 60 * 8 },
 }));
 
-
-// APP MIDDLEWARE
+// ─── APP-LEVEL MIDDLEWARE ─────────────────────────────────────────────────────
 app.use(bodyParser.json());
 app.use(express.json());
+// Serve the compiled React frontend from the client/build directory
 app.use(express.static(path.join(__dirname, "../client/build")));
 
-// Set base path for serverless functions
+// ─── MOUNT ROUTER & EXPORT HANDLER ───────────────────────────────────────────
+// All API routes are namespaced under the Netlify Functions path
 app.use("/.netlify/functions/api", router);
+
+// Wrap the Express app for deployment as a Netlify serverless function
 module.exports.handler = serverless(app);

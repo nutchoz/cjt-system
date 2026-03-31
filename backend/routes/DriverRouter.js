@@ -3,16 +3,16 @@ const Driver = require('../models/Driver');
 
 const router = express.Router();
 
-// Get all drivers
+/**
+ * GET /drivers/get-all
+ * Fetches all driver records ordered by newest first.
+ */
 router.get('/get-all', async (req, res) => {
     try {
         const drivers = await Driver.findAll({
             order: [['createdAt', 'DESC']]
         });
-        res.status(200).json({
-            success: true,
-            drivers
-        });
+        res.status(200).json({ success: true, drivers });
     } catch (error) {
         console.error('Error fetching drivers:', error);
         res.status(500).json({
@@ -23,7 +23,11 @@ router.get('/get-all', async (req, res) => {
     }
 });
 
-// Create a new driver
+/**
+ * POST /drivers/create
+ * Creates a new driver record with name, license number,
+ * activity status (active/banned), and life state (active/deceased).
+ */
 router.post('/create', async (req, res) => {
     try {
         const { name, licenseNumber, status, lifeState } = req.body;
@@ -43,7 +47,11 @@ router.post('/create', async (req, res) => {
     }
 });
 
-// Update a driver
+/**
+ * PUT /drivers/update/:id
+ * Updates an existing driver record by ID.
+ * Returns 404 if the driver does not exist.
+ */
 router.put('/update/:id', async (req, res) => {
     try {
         const { id } = req.params;
@@ -73,7 +81,11 @@ router.put('/update/:id', async (req, res) => {
     }
 });
 
-// Delete a driver
+/**
+ * DELETE /drivers/delete/:id
+ * Permanently deletes a driver record by ID.
+ * Returns 404 if the driver does not exist.
+ */
 router.delete('/delete/:id', async (req, res) => {
     try {
         const { id } = req.params;

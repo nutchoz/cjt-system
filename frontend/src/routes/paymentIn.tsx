@@ -16,8 +16,10 @@ export default function GateInPaymentTab() {
     const [paymentReference, setPaymentReference] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    // Fetch records on initial mount
     useEffect(() => { fetchRecords(); }, []);
 
+    /** Fetches all gate entries and excludes system-generated records (block_location = 'SYS') */
     const fetchRecords = async () => {
         setIsLoading(true);
         try {
@@ -38,11 +40,16 @@ export default function GateInPaymentTab() {
         }
     };
 
+    /**
+     * Handles clicking the gate-in payment status button on a row.
+     * Skips already-paid records. Both laden and non-laden containers
+     * are allowed to open the modal — no blocking logic for gate-in.
+     */
     const handleStatusClick = (record: any) => {
-        //  Already paid — do nothing
+        // Already paid — do nothing
         if (record.gate_in_payment_status === 'paid') return;
 
-        //  Laden and non-Laden both allowed to open the payment modal — no blocking
+        // Both laden and non-laden can proceed to gate-in payment
         setSelectedRecord(record);
         setPaymentAmount('');
         setPaymentMethod('');
@@ -53,12 +60,22 @@ export default function GateInPaymentTab() {
         setShowModal(true);
     };
 
+    /**
+     * Updates the selected payment method and clears the e-payment provider
+     * and reference number to prevent stale values from a previous selection.
+     */
     const handlePaymentMethodChange = (method: string) => {
         setPaymentMethod(method);
         setEPaymentProvider('');
         setPaymentReference('');
     };
 
+    /**
+     * Validates all form fields and submits the gate-in payment via PATCH request.
+     * Enforces: payment method, e-payment provider (if applicable), reference number,
+     * valid amount, and minimum amount vs required amount.
+     * On success, optimistically updates the local record and closes the modal.
+     */
     const handleSubmitPayment = async () => {
         if (!paymentMethod) {
             Swal.fire({ icon: 'warning', title: 'Oops!', text: 'Please select a payment method.', confirmButtonColor: '#0F172A' });
@@ -78,6 +95,8 @@ export default function GateInPaymentTab() {
             Swal.fire({ icon: 'error', title: 'Invalid Amount', text: 'Please enter a valid payment amount.', confirmButtonColor: '#0F172A' });
             return;
         }
+
+        // Paid amount must meet or exceed the required gate-in amount
         if (paymentNeedAmount && amount < parseFloat(paymentNeedAmount)) {
             Swal.fire({ icon: 'error', title: 'Amount Too Low', text: `Payment amount cannot be less than the required amount: ₱${parseFloat(paymentNeedAmount).toLocaleString()}`, confirmButtonColor: '#0F172A' });
             return;
@@ -85,6 +104,7 @@ export default function GateInPaymentTab() {
 
         setIsSubmitting(true);
         try {
+            // For e-payment, use the provider name as the final method value
             const finalMethod = paymentMethod === 'check' ? ePaymentProvider : paymentMethod;
 
             const response = await RequestHandler.fetchData(
@@ -100,6 +120,7 @@ export default function GateInPaymentTab() {
             );
 
             if (response?.success) {
+                // Optimistically update the matching record in local state to avoid a full refetch
                 setRecords(prev => prev.map(r =>
                     r.id === selectedRecord.id
                         ? { ...r, gate_in_payment_status: 'paid', gate_in_payment_amount: amount, gate_in_payment_method: finalMethod, gate_in_payment_date: paymentDate, gate_in_payment_reference: paymentReference }
@@ -117,6 +138,7 @@ export default function GateInPaymentTab() {
         }
     };
 
+    /** Closes the payment modal and resets all form field state to empty defaults */
     const handleCloseModal = () => {
         setShowModal(false);
         setSelectedRecord(null);
@@ -127,6 +149,7 @@ export default function GateInPaymentTab() {
         setPaymentReference('');
     };
 
+    // Column definitions for the DataTable, including cell renderers and export formatters
     const columns = [
         {
             key: 'gate_in', label: 'Gate In', sortable: true,
@@ -154,6 +177,7 @@ export default function GateInPaymentTab() {
         },
         {
             key: 'move_type', label: 'Move Type', sortable: true,
+            // Laden containers are highlighted in violet; empty containers use neutral slate
             render: (value: any) => {
                 const isLaden = value?.toLowerCase() === 'laden';
                 return (
@@ -177,6 +201,7 @@ export default function GateInPaymentTab() {
         },
         {
             key: 'gate_in_payment_method', label: 'Payment Method', sortable: true,
+            // Cash uses green styling; e-payment uses blue; all others use neutral slate
             render: (value: any) => {
                 if (!value) return <span className="text-sm text-slate-400 italic">N/A</span>;
                 const isCash = value.toLowerCase() === 'cash';
@@ -207,6 +232,12 @@ export default function GateInPaymentTab() {
         },
         {
             key: 'gate_in_payment_status', label: 'Gate In Payment', sortable: true, filterable: true,
+            /**
+             * Renders a status button with three possible states:
+             * - PAID: already settled (green, disabled)
+             * - OPTIONAL: laden container with no required payment (teal outline, still clickable)
+             * - UNPAID: payment pending (red, clickable)
+             */
             render: (_: any, row: any) => {
                 const isLaden = row.move_type?.toLowerCase() === 'laden';
                 const isPaid = row.gate_in_payment_status === 'paid';
@@ -219,7 +250,7 @@ export default function GateInPaymentTab() {
                             isPaid
                                 ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white cursor-default'
                                 : isLaden
-                                //  Laden unpaid — teal outline to signal optional but payable
+                                // Laden unpaid — teal outline signals optional but still payable
                                 ? 'bg-white border-2 border-teal-400 text-teal-600 hover:bg-teal-50 cursor-pointer hover:shadow-xl transform hover:scale-105'
                                 : 'bg-gradient-to-r from-rose-500 to-pink-600 text-white hover:from-rose-600 hover:to-pink-700 cursor-pointer hover:shadow-xl transform hover:scale-105'
                         }`}
@@ -227,7 +258,7 @@ export default function GateInPaymentTab() {
                         {isPaid ? (
                             <><svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>PAID</>
                         ) : isLaden ? (
-                            //  Laden unpaid — OPTIONAL label, still clickable
+                            // Laden unpaid — OPTIONAL label, still clickable to record payment
                             <><svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" /></svg>OPTIONAL</>
                         ) : (
                             <><svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>UNPAID</>
@@ -245,6 +276,7 @@ export default function GateInPaymentTab() {
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-8">
+            {/* Global styles for modal animations and input transitions */}
             <style>{`
                 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700&display=swap');
                 .payment-container { font-family: 'Outfit', sans-serif; }
@@ -258,46 +290,52 @@ export default function GateInPaymentTab() {
                 @keyframes popIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
             `}</style>
 
-<div className="payment-container" style={{ width: '96%', minWidth: 0, overflow: 'hidden' }}>
-    <div style={{ overflowX: 'auto', width: '100%' }}>
-        <div style={{ minWidth: '1100px' }}>
-            <DataTable
-                columns={columns}
-                data={records}
-                title="Gate In Payments"
-                loading={isLoading}
-                searchable={true}
-                exportable={true}
-                printable={true}
-                pageSize={10}
-                pageSizeOptions={[10, 25, 50, 100]}
-                emptyMessage="No gate in payment records found"
-            />
-        </div>
-    </div>
+            {/* Scrollable table container with a fixed minimum width to preserve column layout */}
+            <div className="payment-container" style={{ width: '96%', minWidth: 0, overflow: 'hidden' }}>
+                <div style={{ overflowX: 'auto', width: '100%' }}>
+                    <div style={{ minWidth: '1100px' }}>
+                        <DataTable
+                            columns={columns}
+                            data={records}
+                            title="Gate In Payments"
+                            loading={isLoading}
+                            searchable={true}
+                            exportable={true}
+                            printable={true}
+                            pageSize={10}
+                            pageSizeOptions={[10, 25, 50, 100]}
+                            emptyMessage="No gate in payment records found"
+                        />
+                    </div>
+                </div>
 
-
+                {/* Payment modal — rendered only when showModal is true */}
                 {showModal && (
                     <div className="modal-backdrop fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
                         <div className="modal-content bg-white rounded-3xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
+
+                            {/* Modal header */}
                             <div className="bg-gradient-to-r from-slate-900 via-blue-900 to-indigo-900 px-8 py-6 rounded-t-3xl flex-shrink-0">
                                 <h2 className="text-3xl font-black text-white mb-1" style={{ fontFamily: "'Bebas Neue', sans-serif", letterSpacing: '0.02em' }}>Gate In Payment</h2>
                                 <p className="text-blue-200 text-sm">Record the gate in payment for this container</p>
                             </div>
 
+                            {/* Scrollable form body */}
                             <div className="px-8 py-6 space-y-5 overflow-y-auto flex-1 min-h-0">
+
+                                {/* Container summary card with optional laden notice */}
                                 <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-4 border-2 border-blue-200">
                                     <p className="text-xs font-bold text-blue-700 uppercase tracking-wider mb-1">Container Number</p>
                                     <p className="text-2xl font-black text-slate-900 font-mono">{selectedRecord?.container_no}</p>
-                                    {/*  Laden optional notice */}
+                                    {/* Notice badge shown only for laden containers */}
                                     {selectedRecord?.move_type?.toLowerCase() === 'laden' && (
                                         <p className="mt-2 text-xs font-semibold text-teal-600 bg-teal-50 border border-teal-200 rounded-lg px-3 py-1.5">
-                                             Laden container — payment is optional but can still be recorded.
+                                            Laden container — payment is optional but can still be recorded.
                                         </p>
                                     )}
                                 </div>
 
-                                {/* Required Amount (read-only) */}
+                                {/* Required amount — read-only, pre-filled from the record */}
                                 <div>
                                     <label className="block text-sm font-bold text-slate-700 mb-2 uppercase tracking-wide">Required Amount</label>
                                     <div className="relative">
@@ -306,7 +344,7 @@ export default function GateInPaymentTab() {
                                     </div>
                                 </div>
 
-                                {/* Payment Amount */}
+                                {/* Actual payment amount entered by the user */}
                                 <div>
                                     <label className="block text-sm font-bold text-slate-700 mb-2 uppercase tracking-wide">Payment Amount <span className="text-rose-500">*</span></label>
                                     <div className="relative">
@@ -315,7 +353,7 @@ export default function GateInPaymentTab() {
                                     </div>
                                 </div>
 
-                                {/* Payment Method */}
+                                {/* Payment method selector — choosing e-payment reveals a provider sub-select */}
                                 <div>
                                     <label className="block text-sm font-bold text-slate-700 mb-2 uppercase tracking-wide">Payment Method <span className="text-rose-500">*</span></label>
                                     <select value={paymentMethod} onChange={(e) => handlePaymentMethodChange(e.target.value)} className="input-field w-full px-4 py-4 border-2 border-slate-300 rounded-xl focus:outline-none focus:border-blue-500 font-semibold text-slate-800 bg-white">
@@ -325,6 +363,7 @@ export default function GateInPaymentTab() {
                                     </select>
                                 </div>
 
+                                {/* E-payment provider dropdown — conditionally shown when method is 'check' (e-payment) */}
                                 {paymentMethod === 'check' && (
                                     <div className="provider-appear">
                                         <label className="block text-sm font-bold text-slate-700 mb-2 uppercase tracking-wide">E-Payment Provider <span className="text-rose-500">*</span></label>
@@ -340,6 +379,7 @@ export default function GateInPaymentTab() {
                                     </div>
                                 )}
 
+                                {/* Reference number — shown once a payment method is selected; placeholder adapts to method */}
                                 {paymentMethod && (
                                     <div className="provider-appear">
                                         <label className="block text-sm font-bold text-slate-700 mb-2 uppercase tracking-wide">Reference Number <span className="text-rose-500">*</span></label>
@@ -348,14 +388,17 @@ export default function GateInPaymentTab() {
                                     </div>
                                 )}
 
+                                {/* Payment date picker — defaults to today's date */}
                                 <div>
                                     <label className="block text-sm font-bold text-slate-700 mb-2 uppercase tracking-wide">Payment Date <span className="text-rose-500">*</span></label>
                                     <input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} className="input-field w-full px-4 py-4 border-2 border-slate-300 rounded-xl focus:outline-none focus:border-blue-500 font-semibold text-slate-800" />
                                 </div>
                             </div>
 
+                            {/* Modal footer with Cancel and Submit actions */}
                             <div className="px-8 py-6 bg-slate-50 flex gap-4 rounded-b-3xl flex-shrink-0 border-t border-slate-200">
                                 <button onClick={handleCloseModal} disabled={isSubmitting} className="flex-1 px-6 py-4 bg-white border-2 border-slate-300 text-slate-700 rounded-xl font-bold text-lg hover:bg-slate-100 transition-all disabled:opacity-50 shadow-md hover:shadow-lg">Cancel</button>
+                                {/* Submit button shows a spinner while the API request is in progress */}
                                 <button onClick={handleSubmitPayment} disabled={isSubmitting} className="flex-1 px-6 py-4 bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-xl font-bold text-lg hover:from-blue-700 hover:to-indigo-800 transition-all disabled:opacity-50 shadow-lg hover:shadow-xl transform hover:scale-105">
                                     {isSubmitting ? (
                                         <span className="flex items-center justify-center gap-2">

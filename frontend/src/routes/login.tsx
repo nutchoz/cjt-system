@@ -13,6 +13,10 @@ const Login = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
 
+    /**
+     * Handles form submission — calls the login function from auth context.
+     * Navigates to the dashboard on success, or displays an error message on failure.
+     */
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
@@ -64,6 +68,7 @@ const Login = () => {
                     {/* Form area */}
                     <div className="px-10 py-8">
 
+                        {/* Inline error banner — shown only when login fails */}
                         {error && (
                             <div className="mb-6 px-4 py-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2">
                                 <div className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />
@@ -72,6 +77,8 @@ const Login = () => {
                         )}
 
                         <form onSubmit={handleSubmit} className="space-y-5">
+
+                            {/* Email input field */}
                             <div>
                                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">
                                     Email Address
@@ -92,6 +99,7 @@ const Login = () => {
                                 </div>
                             </div>
 
+                            {/* Password input field with show/hide toggle */}
                             <div>
                                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">
                                     Password
@@ -109,6 +117,7 @@ const Login = () => {
                                                    focus:outline-none focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:bg-white
                                                    hover:border-gray-300 transition-all duration-200 disabled:opacity-50 text-sm"
                                     />
+                                    {/* Toggles password visibility between plain text and masked input */}
                                     <button
                                         type="button"
                                         onClick={() => setShowPassword(p => !p)}
@@ -119,6 +128,7 @@ const Login = () => {
                                 </div>
                             </div>
 
+                            {/* Submit button — shows a spinner while the login request is in progress */}
                             <button
                                 type="submit"
                                 disabled={isLoading}
@@ -142,13 +152,14 @@ const Login = () => {
                             </button>
                         </form>
 
+                        {/* Footer copyright line with dynamic current year */}
                         <p className="text-center text-gray-400 text-xs mt-8 tracking-wide">
                             Container Gate Terminal System &copy; {new Date().getFullYear()}
                         </p>
                     </div>
                 </div>
 
-                {/* Bottom navy accent */}
+                {/* Bottom navy accent bar */}
                 <div className="h-2 w-full bg-blue-900 rounded-b-xl" />
             </div>
         </div>

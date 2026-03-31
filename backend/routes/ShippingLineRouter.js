@@ -3,7 +3,10 @@ const ShippingLine = require('../models/ShippingLine');
 
 const router = express.Router();
 
-// Get all shipping lines
+/**
+ * GET /shipping-lines/get-all
+ * Fetches all shipping line records ordered by newest first.
+ */
 router.get('/get-all', async (req, res) => {
     try {
         const shippingLines = await ShippingLine.findAll({
@@ -16,7 +19,11 @@ router.get('/get-all', async (req, res) => {
     }
 });
 
-// Create a new shipping line
+/**
+ * POST /shipping-lines/create
+ * Creates a new shipping line. The email field is optional and stored as
+ * null when blank — it may contain a comma-separated list of addresses.
+ */
 router.post('/create', async (req, res) => {
     try {
         const { code, name, email, life_state } = req.body;
@@ -33,7 +40,12 @@ router.post('/create', async (req, res) => {
     }
 });
 
-// Update a shipping line
+/**
+ * PUT /shipping-lines/update/:id
+ * Updates an existing shipping line by ID.
+ * Stores email as null when an empty value is provided.
+ * Returns 404 if the record does not exist.
+ */
 router.put('/update/:id', async (req, res) => {
     try {
         const { id } = req.params;
@@ -57,7 +69,11 @@ router.put('/update/:id', async (req, res) => {
     }
 });
 
-// Delete a shipping line
+/**
+ * DELETE /shipping-lines/delete/:id
+ * Permanently deletes a shipping line record by ID.
+ * Returns 404 if the record does not exist.
+ */
 router.delete('/delete/:id', async (req, res) => {
     try {
         const { id } = req.params;

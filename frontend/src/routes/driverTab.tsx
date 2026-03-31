@@ -14,6 +14,16 @@ interface DriverRecord {
     lifeState: 'active' | 'deceased';
 }
 
+/**
+ * DriverTab component — manages the full CRUD interface for driver records.
+ *
+ * Features:
+ * - Fetches and displays all drivers in a searchable, exportable, printable data table
+ * - Add / Edit drivers via a modal form with duplicate license number detection
+ * - Delete drivers with a confirmation dialog
+ * - Toggle driver status (Active ↔ Banned) and life state (Active ↔ Deceased) inline
+ * - Edit and Delete actions are restricted to admin users only
+ */
 const DriverTab = () => {
     const { admin } = useAuth();
     const [isLoading, setIsLoading] = useState(false);
@@ -24,10 +34,15 @@ const DriverTab = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [initialFormValues, setInitialFormValues] = useState<Record<string, any>>({});
 
+    // Fetch all driver records once on initial mount
     useEffect(() => {
         fetchRecords();
     }, []);
 
+    /**
+     * Fetches all driver records from the API and updates the records state.
+     * Displays an error alert if the request fails or the response indicates failure.
+     */
     const fetchRecords = async () => {
         setIsLoading(true);
         try {
@@ -47,6 +62,10 @@ const DriverTab = () => {
         }
     };
 
+    /**
+     * Opens the modal in "Add" mode with blank default form values.
+     * Clears any previously selected record to ensure a clean form state.
+     */
     const handleAddNew = () => {
         setEditMode(false);
         setEditingId(null);
@@ -54,6 +73,11 @@ const DriverTab = () => {
         setIsModalOpen(true);
     };
 
+    /**
+     * Opens the modal in "Edit" mode, pre-populating the form with the selected driver's data.
+     *
+     * @param record - The driver record to edit
+     */
     const handleEdit = (record: DriverRecord) => {
         setEditMode(true);
         setEditingId(record.id);
@@ -67,13 +91,17 @@ const DriverTab = () => {
     };
 
     /**
-     * Check for duplicate licenseNumber among existing records.
-     * When editing, exclude the record being edited (by id).
+     * Checks whether the given license number already exists among the current records.
+     * When in edit mode, the record being edited is excluded from the duplicate check.
+     *
+     * @param licenseNumber - The license number string to validate
+     * @returns An object with the duplicate field name and value if a duplicate is found, or null if none
      */
     const checkDuplicates = (licenseNumber: string): { field: string; value: string } | null => {
         const normalizedLicense = licenseNumber.trim().toUpperCase();
 
         for (const record of records) {
+            // Skip the current record when editing to avoid false positive self-match
             if (editMode && record.id === editingId) continue;
 
             if (record.licenseNumber.trim().toUpperCase() === normalizedLicense) {
@@ -83,6 +111,13 @@ const DriverTab = () => {
         return null;
     };
 
+    /**
+     * Returns the field configuration array for the driver form.
+     * Pre-populates each field with values from initialFormValues,
+     * which are set by handleAddNew (blank) or handleEdit (existing record).
+     *
+     * @returns Array of DynamicFormField definitions for the driver modal form
+     */
     const getFormFields = (): DynamicFormField[] => [
         {
             name: 'name',
@@ -126,6 +161,14 @@ const DriverTab = () => {
         },
     ];
 
+    /**
+     * Handles form submission for both creating and updating a driver record.
+     * Runs a duplicate license number check before calling the API.
+     * On success, closes the modal, resets form state, and refreshes the records list.
+     * Displays appropriate success or error alerts via SweetAlert2.
+     *
+     * @param data - The form field values submitted by the user
+     */
     const handleFormSubmit = async (data: Record<string, any>) => {
         // Duplicate check before hitting the API
         const duplicate = checkDuplicates(data.licenseNumber);
@@ -150,6 +193,7 @@ const DriverTab = () => {
                 lifeState: data.lifeState,
             };
 
+            // Route to update or create endpoint based on current mode
             if (editMode && editingId) {
                 response = await RequestHandler.fetchData('PUT', `drivers/update/${editingId}`, payload);
             } else {
@@ -178,6 +222,10 @@ const DriverTab = () => {
         }
     };
 
+    /**
+     * Closes the modal and resets all form-related state back to their defaults.
+     * Called when the user clicks "Cancel" in the driver form.
+     */
     const handleFormCancel = () => {
         setIsModalOpen(false);
         setEditMode(false);
@@ -185,6 +233,12 @@ const DriverTab = () => {
         setInitialFormValues({});
     };
 
+    /**
+     * Prompts the user for confirmation, then deletes the specified driver record via the API.
+     * Refreshes the records list on success and shows an error alert on failure.
+     *
+     * @param record - The driver record to delete
+     */
     const handleDelete = async (record: DriverRecord) => {
         const result = await Swal.fire({
             title: 'Confirm Delete',
@@ -196,6 +250,7 @@ const DriverTab = () => {
             confirmButtonText: 'Yes, Delete',
         });
 
+        // Abort if the user did not confirm
         if (!result.isConfirmed) return;
 
         setIsSubmitting(true);
@@ -214,6 +269,13 @@ const DriverTab = () => {
         }
     };
 
+    /**
+     * Toggles the driver's status between 'active' and 'banned' via the API.
+     * Updates the local records state optimistically on success to avoid a full refetch.
+     * Displays an error alert if the API call fails.
+     *
+     * @param record - The driver record whose status should be toggled
+     */
     const handleToggleStatus = async (record: DriverRecord) => {
         const newStatus: 'active' | 'banned' = record.status === 'active' ? 'banned' : 'active';
         setIsSubmitting(true);
@@ -222,6 +284,7 @@ const DriverTab = () => {
                 ...record,
                 status: newStatus,
             });
+            // Update only the affected record in local state without refetching all records
             setRecords(prev => prev.map(r => r.id === record.id ? { ...r, status: newStatus } : r));
         } catch (error) {
             Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to update status.' });
@@ -230,6 +293,13 @@ const DriverTab = () => {
         }
     };
 
+    /**
+     * Toggles the driver's life state between 'active' and 'deceased' via the API.
+     * Updates the local records state optimistically on success to avoid a full refetch.
+     * Displays an error alert if the API call fails.
+     *
+     * @param record - The driver record whose life state should be toggled
+     */
     const handleToggleLifeState = async (record: DriverRecord) => {
         const newState: 'active' | 'deceased' = record.lifeState === 'active' ? 'deceased' : 'active';
         setIsSubmitting(true);
@@ -238,6 +308,7 @@ const DriverTab = () => {
                 ...record,
                 lifeState: newState,
             });
+            // Update only the affected record in local state without refetching all records
             setRecords(prev => prev.map(r => r.id === record.id ? { ...r, lifeState: newState } : r));
         } catch (error) {
             Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to update life state.' });
@@ -267,6 +338,7 @@ const DriverTab = () => {
             key: 'status',
             label: 'Status',
             sortable: true,
+            // Clickable pill button that toggles the driver's status inline
             render: (value: string, row: DriverRecord) => (
                 <button
                     onClick={(e) => { e.stopPropagation(); handleToggleStatus(row); }}
@@ -290,6 +362,7 @@ const DriverTab = () => {
             key: 'lifeState',
             label: 'Life State',
             sortable: true,
+            // Clickable pill button that toggles the driver's life state inline
             render: (value: string, row: DriverRecord) => (
                 <button
                     onClick={(e) => { e.stopPropagation(); handleToggleLifeState(row); }}
@@ -309,8 +382,9 @@ const DriverTab = () => {
             ),
             exportRender: (value: string) => value,
         },
-        
-            ...(admin?.role === 'admin' ? [{
+
+        // Actions column is only included for admin users
+        ...(admin?.role === 'admin' ? [{
             key: 'actions',
             label: 'Actions',
             sortable: false,
@@ -323,6 +397,7 @@ const DriverTab = () => {
                     >
                         <Edit2 size={14} /> Edit
                     </button>
+                    {/* Delete button is also guarded by an inline admin role check */}
                     {admin?.role === 'admin' && (
                     <button
                         onClick={(e) => { e.stopPropagation(); handleDelete(row); }}
@@ -372,6 +447,7 @@ const DriverTab = () => {
                 />
             </div>
 
+            {/* Add / Edit modal — only rendered when isModalOpen is true */}
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
                     <div className="bg-white rounded-2xl p-8 w-full max-w-2xl max-h-[90vh] overflow-y-auto">

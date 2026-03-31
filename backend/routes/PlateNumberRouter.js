@@ -3,16 +3,16 @@ const PlateNumber = require('../models/PlateNumber');
 
 const router = express.Router();
 
-// Get all plate numbers
+/**
+ * GET /plate-numbers/get-all
+ * Fetches all plate number records ordered by newest first.
+ */
 router.get('/get-all', async (req, res) => {
     try {
         const plateNumbers = await PlateNumber.findAll({
             order: [['createdAt', 'DESC']]
         });
-        res.status(200).json({
-            success: true,
-            plateNumbers
-        });
+        res.status(200).json({ success: true, plateNumbers });
     } catch (error) {
         console.error('Error fetching plate numbers:', error);
         res.status(500).json({
@@ -23,7 +23,10 @@ router.get('/get-all', async (req, res) => {
     }
 });
 
-// Create a new plate number
+/**
+ * POST /plate-numbers/create
+ * Creates a new plate number record with vehicle and company details.
+ */
 router.post('/create', async (req, res) => {
     try {
         const { plateNumber, licenseExpiryDate, status, truckCompany } = req.body;
@@ -43,7 +46,11 @@ router.post('/create', async (req, res) => {
     }
 });
 
-// Update a plate number
+/**
+ * PUT /plate-numbers/update/:id
+ * Updates an existing plate number record by ID.
+ * Returns 404 if the record does not exist.
+ */
 router.put('/update/:id', async (req, res) => {
     try {
         const { id } = req.params;
@@ -73,7 +80,11 @@ router.put('/update/:id', async (req, res) => {
     }
 });
 
-// Delete a plate number
+/**
+ * DELETE /plate-numbers/delete/:id
+ * Permanently deletes a plate number record by ID.
+ * Returns 404 if the record does not exist.
+ */
 router.delete('/delete/:id', async (req, res) => {
     try {
         const { id } = req.params;

@@ -146,12 +146,28 @@ interface CubeProps {
     isHighlighted: boolean;
 }
 
+/**
+ * Renders a single 3D cube representing a grid cell in the container yard.
+ * The cube's visual height scales with the container stack height,
+ * and applies highlight effects (emissive glow + full opacity) when selected.
+ *
+ * @param row - The row index of this cell in the grid
+ * @param col - The column index of this cell in the grid
+ * @param cellHeight - The stack height of containers at this cell (0–4)
+ * @param offsetX - Offset applied along the X axis to center the grid in the scene
+ * @param offsetZ - Offset applied along the Z axis to center the grid in the scene
+ * @param isHighlighted - Whether this cell is currently selected/highlighted
+ */
 function Cube({ row, col, cellHeight, offsetX, offsetZ, isHighlighted }: CubeProps) {
     const meshRef = useRef<THREE.Mesh>(null);
+
+    // Render empty cells with a minimum visible height of 0.5 so the grid slot is always visible
     const displayHeight = cellHeight === 0 ? 0.5 : cellHeight;
     
     const x = row * (CUBE_WIDTH + SPACING) - offsetX;
     const z = col * (CUBE_DEPTH + SPACING) - offsetZ;
+
+    // Position cube so its base sits on y=0 (pivot is at center, so y = half height)
     const y = displayHeight / 2;
 
     return (
@@ -180,7 +196,21 @@ interface GridSceneProps {
     highlightedCol: number | null;
 }
 
+/**
+ * Renders the full 3D scene for a given section, including:
+ * - Ambient and directional lighting
+ * - A grid helper plane for spatial reference
+ * - Row (R0–Rn) and column (C0–Cn) axis labels rendered as 3D text
+ * - All grid cell cubes with their current stack heights
+ *
+ * @param sectionData - 2D array of GridCell objects containing row, col, and height values
+ * @param rowCount - Total number of rows in the current section
+ * @param colCount - Total number of columns in the current section
+ * @param highlightedRow - Row index of the cell to highlight, or null if none
+ * @param highlightedCol - Column index of the cell to highlight, or null if none
+ */
 function GridScene({ sectionData, rowCount, colCount, highlightedRow, highlightedCol }: GridSceneProps) {
+    // Compute centering offsets so the grid is positioned around the world origin
     const offsetX = (rowCount * (CUBE_WIDTH + SPACING)) / 2 - (CUBE_WIDTH + SPACING) / 2;
     const offsetZ = (colCount * (CUBE_DEPTH + SPACING)) / 2 - (CUBE_DEPTH + SPACING) / 2;
 
@@ -192,6 +222,7 @@ function GridScene({ sectionData, rowCount, colCount, highlightedRow, highlighte
             {/* Grid Helper */}
             <gridHelper args={[15, 12, 0x999999, 0xdddddd]} position={[0, 0, 0]} />
 
+            {/* Row Labels (R0, R1, ... Rn) placed along the far edge of the grid */}
             {Array.from({ length: rowCount }).map((_, i) => {
                 const x = i * (CUBE_WIDTH + SPACING) - offsetX;
                 return (
@@ -208,7 +239,7 @@ function GridScene({ sectionData, rowCount, colCount, highlightedRow, highlighte
                 );
             })}
 
-            {/* Column Labels */}
+            {/* Column Labels (C0, C1, ... Cn) placed along the left edge of the grid */}
             {Array.from({ length: colCount }).map((_, j) => {
                 const z = j * (CUBE_DEPTH + SPACING) - offsetZ;
                 return (
@@ -225,7 +256,7 @@ function GridScene({ sectionData, rowCount, colCount, highlightedRow, highlighte
                 );
             })}
 
-            {/* Grid Cubes */}
+            {/* Render a Cube for every cell in the section grid */}
             {sectionData.map((row, i) =>
                 row.map((cell, j) => (
                     <Cube
@@ -243,6 +274,11 @@ function GridScene({ sectionData, rowCount, colCount, highlightedRow, highlighte
     );
 }
 
+/**
+ * Main page component for the 3D Container Grid Highlighter.
+ * Manages section selection, row/column input, cell highlighting,
+ * and fetching of live container location data from the API.
+ */
 export default function GridHighlighter() {
     const [_, setIsLoading] = useState<boolean>(false);
     const [, setRecordsLocation] = useState<any[]>([]);
@@ -252,14 +288,23 @@ export default function GridHighlighter() {
     const [highlightedRow, setHighlightedRow] = useState<number | null>(null);
     const [highlightedCol, setHighlightedCol] = useState<number | null>(null);
 
+    // Fetch container location records once on initial mount
     useEffect(() => {
         fetchRecords();
     }, []);
 
+    /**
+     * Applies fetched container location records to the static SECTIONS_DATA structure.
+     * Each record's location string is expected to follow the format: "SECTION-ROW-COL-HEIGHT"
+     * (e.g., "XA-3-2-2"). Valid records update the corresponding cell's height in-place.
+     *
+     * @param records - Array of record objects returned by the API, each with a `location` string
+     */
     const updateSectionsWithRecords = (records: any[]) => {
         records.forEach(record => {
             const location = record.location;
             const parts = location.split('-');
+
             if (parts.length === 4) {
                 const sectionName = parts[0];
                 const row = parseInt(parts[1]);
@@ -269,6 +314,8 @@ export default function GridHighlighter() {
                 const sectionIndex = SECTIONS_DATA.findIndex(s => s.name === sectionName);
                 if (sectionIndex !== -1) {
                     const section = SECTIONS_DATA[sectionIndex];
+
+                    // Only update if the row/col values are within the section's defined bounds
                     if (row >= 0 && row < section.row && col >= 0 && col < section.col) {
                         section.gridData[row][col].height = height;
                     }
@@ -277,6 +324,10 @@ export default function GridHighlighter() {
         });
     };
 
+    /**
+     * Fetches all container location records from the API and updates the grid data.
+     * Sets loading state during the request and shows an alert on failure.
+     */
     const fetchRecords = async () => {
         setIsLoading(true);
         try {
@@ -294,19 +345,32 @@ export default function GridHighlighter() {
         }
     };
 
+    /**
+     * Validates the row and column inputs against the current section's bounds,
+     * then sets the highlighted cell if inputs are valid.
+     * Alerts the user if either value is out of range or not a number.
+     */
     const handleHighlight = () => {
         const currentSectionData = SECTIONS_DATA[currentSection];
         const rowNum = parseInt(row);
         const colNum = parseInt(col);
 
-        if (isNaN(rowNum) || isNaN(colNum) || rowNum < 0 || rowNum >= currentSectionData.row || colNum < 0 || colNum >= currentSectionData.col) {
+        if (
+            isNaN(rowNum) || isNaN(colNum) ||
+            rowNum < 0 || rowNum >= currentSectionData.row ||
+            colNum < 0 || colNum >= currentSectionData.col
+        ) {
             alert(`Please enter valid row (0-${currentSectionData.row - 1}) and column (0-${currentSectionData.col - 1}) numbers`);
             return;
         }
+
         setHighlightedRow(rowNum);
         setHighlightedCol(colNum);
     };
 
+    /**
+     * Clears the current cell highlight and resets the row/column input fields.
+     */
     const handleReset = () => {
         setHighlightedRow(null);
         setHighlightedCol(null);
@@ -315,6 +379,7 @@ export default function GridHighlighter() {
     };
 
     const currentSectionData = SECTIONS_DATA[currentSection];
+
     return (
         <div className="flex flex-1 h-[90vh] bg-gradient-to-br from-gray-100 to-gray-200">
             <div
@@ -442,45 +507,25 @@ export default function GridHighlighter() {
 
                 <div className="mt-6 p-5 bg-gray-50 rounded-xl">
                     <h3 className="font-bold text-gray-800 mb-3 text-lg">Height Legend</h3>
-
                     <div className="space-y-2">
                         <div className="flex items-center gap-3">
-                            <div
-                                className="w-6 h-6 rounded"
-                                style={{ backgroundColor: '#95A5A6' }}
-                            ></div>
+                            <div className="w-6 h-6 rounded" style={{ backgroundColor: '#95A5A6' }}></div>
                             <span className="text-sm text-gray-700">Height 0 (Empty)</span>
                         </div>
-
                         <div className="flex items-center gap-3">
-                            <div
-                                className="w-6 h-6 rounded"
-                                style={{ backgroundColor: '#3498DB' }}
-                            ></div>
+                            <div className="w-6 h-6 rounded" style={{ backgroundColor: '#3498DB' }}></div>
                             <span className="text-sm text-gray-700">Height 1</span>
                         </div>
-
                         <div className="flex items-center gap-3">
-                            <div
-                                className="w-6 h-6 rounded"
-                                style={{ backgroundColor: '#28B463' }}
-                            ></div>
+                            <div className="w-6 h-6 rounded" style={{ backgroundColor: '#28B463' }}></div>
                             <span className="text-sm text-gray-700">Height 2</span>
                         </div>
-
                         <div className="flex items-center gap-3">
-                            <div
-                                className="w-6 h-6 rounded"
-                                style={{ backgroundColor: '#F1C40F' }}
-                            ></div>
+                            <div className="w-6 h-6 rounded" style={{ backgroundColor: '#F1C40F' }}></div>
                             <span className="text-sm text-gray-700">Height 3</span>
                         </div>
-
                         <div className="flex items-center gap-3">
-                            <div
-                                className="w-6 h-6 rounded"
-                                style={{ backgroundColor: '#E74C3C' }}
-                            ></div>
+                            <div className="w-6 h-6 rounded" style={{ backgroundColor: '#E74C3C' }}></div>
                             <span className="text-sm text-gray-700">Height 4</span>
                         </div>
                     </div>

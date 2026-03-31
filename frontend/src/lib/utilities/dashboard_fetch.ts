@@ -1,5 +1,8 @@
 import RequestHandler from "./RequestHandler";
 
+// ─── Domain model interfaces ──────────────────────────────────────────────────
+
+/** Represents a single gate entry transaction record from the API. */
 export interface GateEntry {
     id: number;
     gate_in: string;
@@ -34,26 +37,27 @@ export interface GateEntry {
     gate_inspector: string | null;
     trans_creator: string;
     person_incharge: string | null;
-    // Gate-in payment
+    // Gate-in payment fields
     gate_in_payment_status: 'paid' | 'unpaid';
     gate_in_payment_amount: number | null;
     gate_in_payment_method: string | null;
     gate_in_payment_date: string | null;
     gate_in_payment_reference: string | null;
     gate_in_payment_need: number | null;
-    // Gate-out payment
+    // Gate-out payment fields
     payment_status: string;
     payment_need: number | null;
     payment_amount: number | null;
     payment_method: string | null;
     payment_date: string | null;
     payment_reference: string | null;
-    // Virtual
+    // Virtual / computed field — not stored in DB
     days_in_yard?: number;
     createdAt: string;
     updatedAt: string;
 }
 
+/** Represents a shipping line record. */
 export interface ShippingLine {
     id: number;
     code: string;
@@ -64,6 +68,7 @@ export interface ShippingLine {
     updatedAt: string;
 }
 
+/** Represents a driver record. */
 export interface Driver {
     id: number;
     name: string;
@@ -74,6 +79,7 @@ export interface Driver {
     updatedAt: string;
 }
 
+/** Represents a vehicle plate number record. */
 export interface PlateNumber {
     id: number;
     plate_no: string;
@@ -81,6 +87,7 @@ export interface PlateNumber {
     updatedAt: string;
 }
 
+/** Represents a transport company record. */
 export interface TransportCompany {
     id: number;
     name: string;
@@ -90,7 +97,7 @@ export interface TransportCompany {
     updatedAt: string;
 }
 
-// ─── Raw API Response shapes ──────────────────────────────────────────────────
+// ─── Raw API response shapes ──────────────────────────────────────────────────
 
 interface GateEntriesResponse {
     success: boolean;
@@ -119,6 +126,7 @@ interface TransportCompaniesResponse {
 
 // ─── Aggregated dashboard payload ────────────────────────────────────────────
 
+/** Combined data structure returned by the parallel dashboard loader. */
 export interface DashboardData {
     gateEntries: GateEntry[];
     shippingLines: ShippingLine[];
@@ -129,6 +137,10 @@ export interface DashboardData {
 
 // ─── Individual fetchers ──────────────────────────────────────────────────────
 
+/**
+ * Fetches all gate entry records from the API.
+ * Returns an empty array and logs a warning/error on failure.
+ */
 export async function fetchGateEntries(): Promise<GateEntry[]> {
     try {
         const res: GateEntriesResponse = await RequestHandler.fetchData('GET', 'gate-entry/get-all');
@@ -141,6 +153,10 @@ export async function fetchGateEntries(): Promise<GateEntry[]> {
     }
 }
 
+/**
+ * Fetches all shipping line records from the API.
+ * Returns an empty array and logs a warning/error on failure.
+ */
 export async function fetchShippingLines(): Promise<ShippingLine[]> {
     try {
         const res: ShippingLinesResponse = await RequestHandler.fetchData('GET', 'shipping-lines/get-all');
@@ -153,6 +169,10 @@ export async function fetchShippingLines(): Promise<ShippingLine[]> {
     }
 }
 
+/**
+ * Fetches all driver records from the API.
+ * Returns an empty array and logs a warning/error on failure.
+ */
 export async function fetchDrivers(): Promise<Driver[]> {
     try {
         const res: DriversResponse = await RequestHandler.fetchData('GET', 'drivers/get-all');
@@ -165,6 +185,10 @@ export async function fetchDrivers(): Promise<Driver[]> {
     }
 }
 
+/**
+ * Fetches all plate number records from the API.
+ * Returns an empty array and logs a warning/error on failure.
+ */
 export async function fetchPlateNumbers(): Promise<PlateNumber[]> {
     try {
         const res: PlateNumbersResponse = await RequestHandler.fetchData('GET', 'plate-numbers/get-all');
@@ -177,6 +201,10 @@ export async function fetchPlateNumbers(): Promise<PlateNumber[]> {
     }
 }
 
+/**
+ * Fetches all transport company records from the API.
+ * Returns an empty array and logs a warning/error on failure.
+ */
 export async function fetchTransportCompanies(): Promise<TransportCompany[]> {
     try {
         const res: TransportCompaniesResponse = await RequestHandler.fetchData('GET', 'transport-companies/get-all');
@@ -191,6 +219,11 @@ export async function fetchTransportCompanies(): Promise<TransportCompany[]> {
 
 // ─── Main loader — fetches everything in parallel ─────────────────────────────
 
+/**
+ * Fires all five individual fetchers concurrently using Promise.all
+ * and returns the aggregated DashboardData payload.
+ * Individual failures are silently swallowed and returned as empty arrays.
+ */
 export async function fetchDashboardData(): Promise<DashboardData> {
     const [
         gateEntries,
@@ -217,20 +250,36 @@ export async function fetchDashboardData(): Promise<DashboardData> {
 
 // ─── Date-range helpers (used by Dashboard + Reports) ────────────────────────
 
+/**
+ * Returns a new Date set to the start boundary of the given unit.
+ * - 'day'   → 00:00:00.000 of the same day
+ * - 'week'  → 00:00:00.000 of the preceding Sunday
+ * - 'month' → 00:00:00.000 of the 1st of the month
+ */
 export function startOf(date: Date, unit: 'day' | 'week' | 'month'): Date {
     const d = new Date(date);
-    if (unit === 'day') { d.setHours(0, 0, 0, 0); return d; }
-    if (unit === 'week') { d.setDate(d.getDate() - d.getDay()); d.setHours(0, 0, 0, 0); return d; }
-    d.setDate(1); d.setHours(0, 0, 0, 0); return d;
+    if (unit === 'day')   { d.setHours(0, 0, 0, 0); return d; }
+    if (unit === 'week')  { d.setDate(d.getDate() - d.getDay()); d.setHours(0, 0, 0, 0); return d; }
+    d.setDate(1); d.setHours(0, 0, 0, 0); return d; // month
 }
 
+/**
+ * Returns a new Date set to the end boundary of the given unit.
+ * - 'day'   → 23:59:59.999 of the same day
+ * - 'week'  → 23:59:59.999 of the following Saturday
+ * - 'month' → 23:59:59.999 of the last day of the month
+ */
 export function endOf(date: Date, unit: 'day' | 'week' | 'month'): Date {
     const d = new Date(date);
-    if (unit === 'day') { d.setHours(23, 59, 59, 999); return d; }
-    if (unit === 'week') { d.setDate(d.getDate() + (6 - d.getDay())); d.setHours(23, 59, 59, 999); return d; }
-    d.setMonth(d.getMonth() + 1, 0); d.setHours(23, 59, 59, 999); return d;
+    if (unit === 'day')   { d.setHours(23, 59, 59, 999); return d; }
+    if (unit === 'week')  { d.setDate(d.getDate() + (6 - d.getDay())); d.setHours(23, 59, 59, 999); return d; }
+    d.setMonth(d.getMonth() + 1, 0); d.setHours(23, 59, 59, 999); return d; // month
 }
 
+/**
+ * Filters an array of gate entries to only those whose gate_in timestamp
+ * falls within the inclusive [from, to] date range.
+ */
 export function filterByRange(entries: GateEntry[], from: Date, to: Date): GateEntry[] {
     return entries.filter(e => {
         const d = new Date(e.gate_in);
@@ -238,8 +287,15 @@ export function filterByRange(entries: GateEntry[], from: Date, to: Date): GateE
     });
 }
 
-// ─── Safe number coercion (API may return amounts as strings) ─────────────────
+// ─── Safe number coercion ─────────────────────────────────────────────────────
 
+/**
+ * Safely coerces any API value to a number.
+ * Necessary because the API may return numeric fields as strings —
+ * using `?? 0` would keep the string type and cause string concatenation
+ * instead of numeric addition when summing totals.
+ * Returns 0 for null, undefined, or non-numeric values.
+ */
 const toN = (val: unknown): number => {
     const n = Number(val);
     return isNaN(n) ? 0 : n;
@@ -247,28 +303,32 @@ const toN = (val: unknown): number => {
 
 // ─── Payment summary helper ───────────────────────────────────────────────────
 
+/** Aggregated payment metrics derived from a set of gate entries. */
 export interface PaymentSummary {
-    totalGateIn: number;
-    totalGateOut: number;
-    totalRevenue: number;
-    totalUnpaidGateIn: number;
-    totalUnpaidGateOut: number;
-    paidGICount: number;
-    unpaidGICount: number;
-    paidGOCount: number;
-    unpaidGOCount: number;
-    totalExpected: number;
-    collectionRate: number;
+    totalGateIn: number;        // Sum of all gate-in payment amounts
+    totalGateOut: number;       // Sum of all gate-out payment amounts
+    totalRevenue: number;       // totalGateIn + totalGateOut
+    totalUnpaidGateIn: number;  // Sum of outstanding gate-in amounts
+    totalUnpaidGateOut: number; // Sum of outstanding gate-out amounts
+    paidGICount: number;        // Count of paid gate-in entries
+    unpaidGICount: number;      // Count of unpaid gate-in entries
+    paidGOCount: number;        // Count of paid gate-out entries (with gate_out set)
+    unpaidGOCount: number;      // Count of unpaid gate-out entries (with gate_out set)
+    totalExpected: number;      // Total expected revenue across all entries
+    collectionRate: number;     // Percentage of expected revenue actually collected
 }
 
+/**
+ * Computes aggregated payment metrics from an array of gate entries.
+ * All monetary values are coerced through toN() to guard against
+ * string-typed amounts returned by the API.
+ */
 export function computePaymentSummary(entries: GateEntry[]): PaymentSummary {
-    // FIX: use toN() instead of ?? 0 — the API returns amounts as strings,
-    // so (e.gate_in_payment_amount ?? 0) keeps the string and causes
-    // string concatenation instead of numeric addition.
     const totalGateIn  = entries.reduce((s, e) => s + toN(e.gate_in_payment_amount), 0);
     const totalGateOut = entries.reduce((s, e) => s + toN(e.payment_amount), 0);
     const totalRevenue = totalGateIn + totalGateOut;
 
+    // Sum the outstanding amounts only for unpaid entries
     const totalUnpaidGateIn  = entries
         .filter(e => e.gate_in_payment_status === 'unpaid')
         .reduce((s, e) => s + toN(e.gate_in_payment_need), 0);
@@ -278,12 +338,15 @@ export function computePaymentSummary(entries: GateEntry[]): PaymentSummary {
 
     const paidGICount   = entries.filter(e => e.gate_in_payment_status === 'paid').length;
     const unpaidGICount = entries.filter(e => e.gate_in_payment_status === 'unpaid').length;
-    const paidGOCount   = entries.filter(e => e.payment_status === 'paid' && e.gate_out).length;
+    // Gate-out counts only consider entries that have actually exited (gate_out is set)
+    const paidGOCount   = entries.filter(e => e.payment_status === 'paid'   && e.gate_out).length;
     const unpaidGOCount = entries.filter(e => e.payment_status === 'unpaid' && e.gate_out).length;
 
+    // Total expected = sum of all required gate-in and gate-out amounts
     const totalExpected = entries.reduce(
         (s, e) => s + toN(e.gate_in_payment_need) + toN(e.payment_need), 0
     );
+    // Collection rate = percentage of expected revenue that has been collected
     const collectionRate = totalExpected > 0
         ? Math.round((totalRevenue / totalExpected) * 100)
         : 0;

@@ -24,10 +24,12 @@ const PlateNumberTab = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [initialFormValues, setInitialFormValues] = useState<Record<string, any>>({});
 
+    // Fetch records on initial mount
     useEffect(() => {
         fetchRecords();
     }, []);
 
+    /** Fetches all plate number records from the API and updates local state */
     const fetchRecords = async () => {
         setIsLoading(true);
         try {
@@ -47,6 +49,7 @@ const PlateNumberTab = () => {
         }
     };
 
+    /** Resets the form to empty defaults and opens the modal in create (add new) mode */
     const handleAddNew = () => {
         setEditMode(false);
         setEditingId(null);
@@ -54,6 +57,7 @@ const PlateNumberTab = () => {
         setIsModalOpen(true);
     };
 
+    /** Populates the form with an existing record's data and opens the modal in edit mode */
     const handleEdit = (record: PlateNumberRecord) => {
         setEditMode(true);
         setEditingId(record.id);
@@ -69,8 +73,10 @@ const PlateNumberTab = () => {
     };
 
     /**
-     * Check for duplicate plateNumber among existing records.
-     * When editing, exclude the record being edited (by id).
+     * Checks whether the given plate number already exists in the records list.
+     * When editing, the record being edited is excluded from the check to allow
+     * saving without triggering a false duplicate on itself.
+     * Returns the duplicate field info if found, or null if no duplicate exists.
      */
     const checkDuplicates = (plateNumber: string): { field: string; value: string } | null => {
         const normalized = plateNumber.trim().toUpperCase();
@@ -85,6 +91,7 @@ const PlateNumberTab = () => {
         return null;
     };
 
+    /** Returns the field definitions used to render the plate number form */
     const getFormFields = (): DynamicFormField[] => [
         {
             name: 'plateNumber',
@@ -126,6 +133,11 @@ const PlateNumberTab = () => {
         },
     ];
 
+    /**
+     * Handles form submission for both creating and updating a plate number record.
+     * Runs a duplicate check before sending to the API.
+     * On success, closes the modal and refreshes the records list.
+     */
     const handleFormSubmit = async (data: Record<string, any>) => {
         const duplicate = checkDuplicates(data.plateNumber);
         if (duplicate) {
@@ -177,6 +189,7 @@ const PlateNumberTab = () => {
         }
     };
 
+    /** Closes the form modal and resets all edit-related state */
     const handleFormCancel = () => {
         setIsModalOpen(false);
         setEditMode(false);
@@ -184,6 +197,10 @@ const PlateNumberTab = () => {
         setInitialFormValues({});
     };
 
+    /**
+     * Prompts the user for confirmation, then deletes the selected plate number record.
+     * Refreshes the records list on success.
+     */
     const handleDelete = async (record: PlateNumberRecord) => {
         const result = await Swal.fire({
             title: 'Confirm Delete',
@@ -213,6 +230,10 @@ const PlateNumberTab = () => {
         }
     };
 
+    /**
+     * Toggles a plate number's status between 'active' and 'banned' via a PUT request.
+     * Optimistically updates the local record on success to avoid a full refetch.
+     */
     const handleToggleStatus = async (record: PlateNumberRecord) => {
         const newStatus: 'active' | 'banned' = record.status === 'active' ? 'banned' : 'active';
         setIsSubmitting(true);
@@ -221,6 +242,7 @@ const PlateNumberTab = () => {
                 ...record,
                 status: newStatus,
             });
+            // Optimistically update the matching record in local state
             setRecords(prev => prev.map(r => r.id === record.id ? { ...r, status: newStatus } : r));
         } catch (error) {
             Swal.fire({ icon: 'error', title: 'Error', text: 'Failed to update status.' });
@@ -229,17 +251,20 @@ const PlateNumberTab = () => {
         }
     };
 
+    /** Formats an ISO date string into a short human-readable date (e.g., Jan 01, 2025). Returns '—' if empty. */
     const formatDate = (dateStr: string) => {
         if (!dateStr) return '—';
         const date = new Date(dateStr);
         return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: '2-digit' });
     };
 
+    /** Returns true if the given date string represents a date in the past */
     const isExpired = (dateStr: string) => {
         if (!dateStr) return false;
         return new Date(dateStr) < new Date();
     };
 
+    // Column definitions for the DataTable, including renderers and export formatters
     const columns = [
         {
             key: 'plateNumber',
@@ -261,6 +286,7 @@ const PlateNumberTab = () => {
             key: 'licenseExpiryDate',
             label: 'License Expiry Date',
             sortable: true,
+            // Highlights expired dates in red and appends an "Expired" badge
             render: (value: string) => {
                 const expired = isExpired(value);
                 return (
@@ -280,6 +306,7 @@ const PlateNumberTab = () => {
             key: 'status',
             label: 'Status',
             sortable: true,
+            // Clickable badge that toggles between Active (green) and Banned (red)
             render: (value: string, row: PlateNumberRecord) => (
                 <button
                     onClick={(e) => { e.stopPropagation(); handleToggleStatus(row); }}
@@ -299,8 +326,8 @@ const PlateNumberTab = () => {
             ),
             exportRender: (value: string) => value,
         },
-        
 
+        // Actions column is only rendered for admin users
         ...(admin?.role === 'admin' ? [{
             key: 'actions',
             label: 'Actions',
@@ -314,7 +341,6 @@ const PlateNumberTab = () => {
                     >
                         <Edit2 size={14} /> Edit
                     </button>
-                    
                     <button
                         onClick={(e) => { e.stopPropagation(); handleDelete(row); }}
                         className="px-3 py-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600 transition text-sm font-semibold flex items-center gap-1"
@@ -363,6 +389,7 @@ const PlateNumberTab = () => {
                 />
             </div>
 
+            {/* Form modal — shown when adding or editing a plate number */}
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
                     <div className="bg-white rounded-2xl p-8 w-full max-w-2xl max-h-[90vh] overflow-y-auto">

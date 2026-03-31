@@ -3,16 +3,16 @@ const TransportCompany = require('../models/TransportCompany');
 
 const router = express.Router();
 
-// Get all transport companies
+/**
+ * GET /transport-companies/get-all
+ * Fetches all transport company records ordered by newest first.
+ */
 router.get('/get-all', async (req, res) => {
     try {
         const transportCompanies = await TransportCompany.findAll({
             order: [['createdAt', 'DESC']]
         });
-        res.status(200).json({
-            success: true,
-            transportCompanies
-        });
+        res.status(200).json({ success: true, transportCompanies });
     } catch (error) {
         console.error('Error fetching transport companies:', error);
         res.status(500).json({
@@ -23,7 +23,10 @@ router.get('/get-all', async (req, res) => {
     }
 });
 
-// Create a new transport company
+/**
+ * POST /transport-companies/create
+ * Creates a new transport company record from the request body.
+ */
 router.post('/create', async (req, res) => {
     try {
         const { name, code, status } = req.body;
@@ -43,7 +46,11 @@ router.post('/create', async (req, res) => {
     }
 });
 
-// Update a transport company
+/**
+ * PUT /transport-companies/update/:id
+ * Updates the name, code, and status of an existing transport company by ID.
+ * Returns 404 if the record does not exist.
+ */
 router.put('/update/:id', async (req, res) => {
     try {
         const { id } = req.params;
@@ -73,7 +80,11 @@ router.put('/update/:id', async (req, res) => {
     }
 });
 
-// Delete a transport company
+/**
+ * DELETE /transport-companies/delete/:id
+ * Permanently deletes a transport company record by ID.
+ * Returns 404 if the record does not exist.
+ */
 router.delete('/delete/:id', async (req, res) => {
     try {
         const { id } = req.params;
