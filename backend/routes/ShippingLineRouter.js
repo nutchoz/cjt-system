@@ -23,14 +23,16 @@ router.get('/get-all', async (req, res) => {
  * POST /shipping-lines/create
  * Creates a new shipping line. The email field is optional and stored as
  * null when blank — it may contain a comma-separated list of addresses.
+ * The type field describes the shipping line type (e.g., FCL, LCL, RORO).
  */
 router.post('/create', async (req, res) => {
     try {
-        const { code, name, email, life_state } = req.body;
+        const { code, name, email, type, life_state } = req.body; // ← added type
         const newShippingLine = await ShippingLine.create({
             code,
             name,
             email: email || null,
+            type,                // ← added type
             life_state,
         });
         res.status(201).json({ success: true, message: 'Shipping line created successfully', data: newShippingLine });
@@ -49,7 +51,7 @@ router.post('/create', async (req, res) => {
 router.put('/update/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { code, name, email, life_state } = req.body;
+        const { code, name, email, type, life_state } = req.body; // ← added type
 
         const shippingLine = await ShippingLine.findByPk(id);
         if (!shippingLine) {
@@ -60,6 +62,7 @@ router.put('/update/:id', async (req, res) => {
             code,
             name,
             email: email || null,
+            type,                // ← added type
             life_state,
         });
         res.status(200).json({ success: true, message: 'Shipping line updated successfully', data: shippingLine });

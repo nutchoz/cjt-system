@@ -23,6 +23,12 @@ const ShippingLine = sequelize.define('ShippingLine', {
         type: DataTypes.TEXT,
         allowNull: true,
     },
+    // ✅ Stores the shipping line type e.g. FCL, LCL, RORO — user-defined free text.
+    type: {
+        type: DataTypes.STRING(50),
+        allowNull: false,
+        defaultValue: '',
+    },
     life_state: {
         type: DataTypes.ENUM('Active', 'Inactive'),
         allowNull: false,
